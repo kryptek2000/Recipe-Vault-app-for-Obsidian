@@ -2,6 +2,10 @@
 
 A markdown-native recipe manager, meal planner, and interactive cooking companion built specifically for **Obsidian** vaults. Read, edit, sync, and cook directly from your Obsidian `.md` recipe collection with YAML frontmatter, Dataview tags, wikilinks, dynamic portion scaling, multi-step cooking timers, and AI-powered web recipe scraping.
 
+<p align="center">
+  <img src="./src/assets/images/app_screenshot_1787266053153.jpg" alt="Obsidian Vault Recipe Manager & Cooking Companion UI Screenshot" width="100%" />
+</p>
+
 ---
 
 ## ✨ Features
@@ -55,40 +59,78 @@ A markdown-native recipe manager, meal planner, and interactive cooking companio
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Local Installation & Setup (Standalone)
+
+This app is a self-contained full-stack Node.js + React application that runs locally on your machine (macOS, Windows, or Linux) with **no cloud platform, container service, or AI Studio requirement**.
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (version 18.0 or higher recommended)
-- [npm](https://www.npmjs.com/) or [bun](https://bun.sh/)
-- *(Optional)* A [Google Gemini API Key](https://aistudio.google.com/) for the AI Web Recipe Grabber feature.
 
-### Installation
+Ensure you have the following installed on your machine:
+- **Node.js** (v18.0.0 or higher): [Download Node.js](https://nodejs.org/)
+- **npm** (bundled with Node.js) or **pnpm** / **yarn** / **bun**
+- **Git**: [Download Git](https://git-scm.com/)
+- *(Optional)* **Obsidian**: [Download Obsidian](https://obsidian.md/) to connect your existing recipe vaults.
+- *(Optional)* **Gemini API Key**: If you want to use the AI-powered web recipe scraping feature, get a free key from [Google AI Studio](https://aistudio.google.com/). The rest of the app (vault sync, cooking mode, timers, meal planning, offline recipe editing) works 100% locally with zero external API dependencies.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/obsidian-recipe-manager.git
-   cd obsidian-recipe-manager
-   ```
+---
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+### Step-by-Step Local Setup
 
-3. **Configure environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
-   Add your Gemini API key inside `.env`:
-   ```env
-   GEMINI_API_KEY="your_gemini_api_key_here"
-   ```
+#### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/obsidian-recipe-manager.git
+cd obsidian-recipe-manager
+```
 
-4. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
-   Open your browser and navigate to `http://localhost:3000`.
+#### 2. Install dependencies
+```bash
+npm install
+```
+*(or `bun install` / `pnpm install`)*
+
+#### 3. Set up environment variables
+Copy the template configuration file:
+```bash
+cp .env.example .env
+```
+
+Open `.env` in any text editor and add your API key (optional, only needed for AI web recipe scraping):
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+#### 4. Run the local development server
+```bash
+npm run dev
+```
+
+The application will start on **`http://localhost:3000`**. Open this URL in Chrome, Edge, Brave, or Safari.
+
+---
+
+### 📦 Production Build & Local Hosting
+
+To build an optimized production bundle and run it as a lightweight background service or home server (e.g., Raspberry Pi, Unraid, Home Assistant, or local desktop):
+
+```bash
+# 1. Build frontend assets and server bundle
+npm run build
+
+# 2. Start the production server
+npm run start
+```
+The production server will listen on `http://localhost:3000`.
+
+---
+
+### 💡 Connecting Your Local Obsidian Vault
+
+When running locally in a Chromium-based browser (Google Chrome, Microsoft Edge, Brave, Opera, Arc):
+1. Click **Connect Vault** in the top navigation bar.
+2. Choose **Select Vault Directory** (uses the native browser File System Access API).
+3. Select your local Obsidian vault folder (or a `Recipes/` subfolder).
+4. Grant read/write permission when prompted.
+5. All recipe edits, new recipes, and web-scraped recipes will write directly to your local `.md` files on disk!
 
 ---
 
