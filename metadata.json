@@ -1,0 +1,6 @@
+{
+  "name": "Obsidian Vault Recipe Manager",
+  "description": "A dedicated, markdown-native recipe manager and cooking companion tailored for Obsidian vaults, supporting YAML frontmatter, Dataview tags, interactive cooking mode, portion scaling, and vault synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
