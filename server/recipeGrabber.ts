@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { safeFetchHtml } from "./ssrfGuard.js";
 
 dotenv.config();
 
@@ -339,28 +340,17 @@ export async function grabRecipeFromWeb(params: {
   let htmlContent = params.html || "";
   let siteName = "";
 
-  // 1. Fetch web page if URL provided
+  // 1. Fetch web page securely if URL provided
+  let effectiveSourceUrl = url;
   if (url && !htmlContent) {
+    const fetchResult = await safeFetchHtml(url);
+    htmlContent = fetchResult.html;
+    effectiveSourceUrl = fetchResult.finalUrl;
     try {
-      const parsedUrl = new URL(url);
+      const parsedUrl = new URL(effectiveSourceUrl);
       siteName = parsedUrl.hostname.replace(/^www\./, "");
-      
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-          "Cache-Control": "no-cache",
-        },
-      });
-
-      if (response.ok) {
-        htmlContent = await response.text();
-      }
-    } catch (fetchErr) {
-      console.warn("Direct fetch warning:", fetchErr);
+    } catch {
+      siteName = "";
     }
   }
 
