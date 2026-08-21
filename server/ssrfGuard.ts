@@ -64,66 +64,116 @@ function isRestrictedIPv4(octets: number[]): boolean {
 }
 
 /**
+ * Parses any valid IPv6 string (including compressed ::, hex, or embedded IPv4 notation)
+ * into an array of 8 16-bit integers (hextets).
+ */
+export function parseIPv6ToHextets(ip: string): number[] | null {
+  let normalized = ip.toLowerCase().trim().replace(/^\[|\]$/g, "");
+
+  // Check if there is an embedded IPv4 part at the end (e.g. ::ffff:127.0.0.1 or 64:ff9b::192.168.1.1)
+  const lastColon = normalized.lastIndexOf(":");
+  let embeddedV4Hextets: number[] | null = null;
+  if (lastColon !== -1) {
+    const potentialV4 = normalized.substring(lastColon + 1);
+    if (potentialV4.includes(".")) {
+      const v4Parts = potentialV4.split(".").map(Number);
+      if (v4Parts.length === 4 && v4Parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
+        embeddedV4Hextets = [
+          (v4Parts[0] << 8) | v4Parts[1],
+          (v4Parts[2] << 8) | v4Parts[3],
+        ];
+        normalized = normalized.substring(0, lastColon);
+      }
+    }
+  }
+
+  const doubleColonCount = (normalized.match(/::/g) || []).length;
+  if (doubleColonCount > 1) return null; // Invalid IPv6
+
+  let parts: string[];
+  if (doubleColonCount === 1) {
+    const [left, right] = normalized.split("::");
+    const leftParts = left ? left.split(":") : [];
+    const rightParts = right ? right.split(":") : [];
+    const totalExpected = 8 - (embeddedV4Hextets ? 2 : 0);
+    const missing = totalExpected - (leftParts.length + rightParts.length);
+    if (missing < 0) return null;
+    const zeros = new Array(missing).fill("0");
+    parts = [...leftParts, ...zeros, ...rightParts];
+  } else {
+    parts = normalized.split(":");
+  }
+
+  const hextets: number[] = [];
+  for (const part of parts) {
+    const num = parseInt(part || "0", 16);
+    if (isNaN(num) || num < 0 || num > 0xffff) return null;
+    hextets.push(num);
+  }
+
+  if (embeddedV4Hextets) {
+    hextets.push(...embeddedV4Hextets);
+  }
+
+  if (hextets.length !== 8) return null;
+  return hextets;
+}
+
+/**
  * Checks if a parsed IPv6 address falls within forbidden ranges.
  */
 function isRestrictedIPv6(ip: string): boolean {
-  const normalized = ip.toLowerCase();
+  const hextets = parseIPv6ToHextets(ip);
+  if (!hextets) return true; // Malformed IPv6 treated as restricted
 
-  // :: (Unspecified) and ::1 (Loopback)
-  if (normalized === "::" || normalized === "::1" || normalized === "0:0:0:0:0:0:0:0" || normalized === "0:0:0:0:0:0:0:1") {
+  const [h0, h1, h2, h3, h4, h5, h6, h7] = hextets;
+
+  // 1. :: (Unspecified) and ::1 (Loopback)
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0 && h6 === 0) {
+    if (h7 === 0 || h7 === 1) return true;
+  }
+
+  // 2. IPv4-mapped IPv6 (::ffff:0:0/96, e.g. ::ffff:127.0.0.1 or ::ffff:7f00:1)
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0xffff) {
+    const octets = [(h6 >> 8) & 0xff, h6 & 0xff, (h7 >> 8) & 0xff, h7 & 0xff];
+    return isRestrictedIPv4(octets);
+  }
+
+  // 3. IPv4/IPv6 translation (64:ff9b::/96)
+  if (h0 === 0x0064 && h1 === 0xff9b && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0) {
+    const octets = [(h6 >> 8) & 0xff, h6 & 0xff, (h7 >> 8) & 0xff, h7 & 0xff];
+    return isRestrictedIPv4(octets);
+  }
+
+  // 4. 6to4 prefix (2002::/16) embeds IPv4 in the next 32 bits
+  if (h0 === 0x2002) {
+    const octets = [(h1 >> 8) & 0xff, h1 & 0xff, (h2 >> 8) & 0xff, h2 & 0xff];
+    return isRestrictedIPv4(octets);
+  }
+
+  // 5. Unique Local Address (fc00::/7 -> fc00:: to fdff::)
+  if ((h0 & 0xfe00) === 0xfc00) {
     return true;
   }
 
-  // IPv4-mapped IPv6 (::ffff:x.x.x.x or ::ffff:hex)
-  if (normalized.startsWith("::ffff:") || normalized.startsWith("0:0:0:0:0:ffff:")) {
-    const ipv4Part = normalized.substring(normalized.lastIndexOf(":") + 1);
-    if (net.isIPv4(ipv4Part)) {
-      const octets = ipv4Part.split(".").map(Number);
-      return isRestrictedIPv4(octets);
-    }
+  // 6. Link-local Unicast (fe80::/10)
+  if ((h0 & 0xffc0) === 0xfe80) {
+    return true;
   }
 
-  // IPv4/IPv6 translation (64:ff9b::/96)
-  if (normalized.startsWith("64:ff9b::") || normalized.startsWith("0064:ff9b:")) {
-    const ipv4Part = normalized.substring(normalized.lastIndexOf(":") + 1);
-    if (net.isIPv4(ipv4Part)) {
-      const octets = ipv4Part.split(".").map(Number);
-      return isRestrictedIPv4(octets);
-    }
+  // 7. Multicast (ff00::/8)
+  if ((h0 & 0xff00) === 0xff00) {
+    return true;
   }
 
-  // 6to4 prefix (2002::/16) embeds IPv4 in the next 32 bits
-  if (normalized.startsWith("2002:")) {
-    const parts = normalized.split(":");
-    if (parts.length >= 3) {
-      const p1 = parseInt(parts[1], 16);
-      const p2 = parseInt(parts[2], 16);
-      if (!isNaN(p1) && !isNaN(p2)) {
-        const octets = [(p1 >> 8) & 0xff, p1 & 0xff, (p2 >> 8) & 0xff, p2 & 0xff];
-        return isRestrictedIPv4(octets);
-      }
-    }
-    return true; // Malformed 6to4 is rejected
+  // 8. Documentation (2001:db8::/32)
+  if (h0 === 0x2001 && h1 === 0x0db8) {
+    return true;
   }
 
-  // Unique Local Address (fc00::/7 -> fc00:: to fdff::)
-  const firstHextet = parseInt(normalized.split(":")[0] || "0", 16);
-  if (!isNaN(firstHextet)) {
-    if ((firstHextet & 0xfe00) === 0xfc00) {
-      return true; // fc00::/7 private
-    }
-    if ((firstHextet & 0xffc0) === 0xfe80) {
-      return true; // fe80::/10 link-local
-    }
-    if ((firstHextet & 0xff00) === 0xff00) {
-      return true; // ff00::/8 multicast
-    }
-    if (firstHextet === 0x2001 && normalized.includes(":db8:")) {
-      return true; // 2001:db8::/32 documentation
-    }
-    if (firstHextet === 0x0100) {
-      return true; // 100::/64 discard prefix
-    }
+  // 9. Discard prefix (100::/64)
+  if (h0 === 0x0100 && h1 === 0 && h2 === 0 && h3 === 0) {
+    return true;
   }
 
   return false;
@@ -133,13 +183,15 @@ function isRestrictedIPv6(ip: string): boolean {
  * Checks whether an IP string is restricted (private, loopback, link-local, multicast, metadata).
  */
 export function isRestrictedIP(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const octets = ip.split(".").map(Number);
+  const cleanIp = ip.trim().replace(/^\[|\]$/g, "");
+
+  if (net.isIPv4(cleanIp)) {
+    const octets = cleanIp.split(".").map(Number);
     return isRestrictedIPv4(octets);
   }
 
-  if (net.isIPv6(ip)) {
-    return isRestrictedIPv6(ip);
+  if (net.isIPv6(cleanIp) || parseIPv6ToHextets(cleanIp) !== null) {
+    return isRestrictedIPv6(cleanIp);
   }
 
   return true; // Not a valid IP -> restricted

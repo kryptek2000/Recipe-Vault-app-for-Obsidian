@@ -94,7 +94,22 @@ app.post("/api/grab-recipe", recipeImportRateLimiter, async (req, res) => {
     return res.json({ success: true, recipe });
   } catch (error: any) {
     const errorMsg = error?.message || "";
-    console.error(`[${new Date().toISOString()}] [Client: ${clientIp}] Recipe Import Error:`, error);
+    const isSecurityOrClientError =
+      errorMsg.includes("restricted") ||
+      errorMsg.includes("permitted") ||
+      errorMsg.includes("Invalid URL") ||
+      errorMsg.includes("credentials") ||
+      errorMsg.includes("resolve") ||
+      errorMsg.includes("timed out") ||
+      errorMsg.includes("8s limit") ||
+      errorMsg.includes("2MB limit") ||
+      errorMsg.includes("size exceeds");
+
+    if (isSecurityOrClientError) {
+      console.warn(`[${new Date().toISOString()}] [Client: ${clientIp}] Recipe Import Blocked/Rejected: ${errorMsg}`);
+    } else {
+      console.error(`[${new Date().toISOString()}] [Client: ${clientIp}] Recipe Import Unexpected Error:`, error);
+    }
 
     // Return safe, user-friendly error messages without leaking internal topology
     if (
