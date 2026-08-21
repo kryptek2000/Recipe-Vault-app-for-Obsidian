@@ -1,4 +1,7 @@
-# 🍳 Obsidian Vault Recipe Manager & Cooking Companion
+# 🍳 Obsidian Vault Recipe Manager & Cooking Companion `v0.1.0`
+
+[![Version](https://img.shields.io/badge/version-0.1.0-amber.svg)](package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A markdown-native recipe manager, meal planner, and interactive cooking companion built specifically for **Obsidian** vaults. Read, edit, sync, and cook directly from your Obsidian `.md` recipe collection with YAML frontmatter, Dataview tags, wikilinks, dynamic portion scaling, multi-step cooking timers, and AI-powered web recipe scraping.
 

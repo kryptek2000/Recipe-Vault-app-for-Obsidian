@@ -114,6 +114,9 @@ export function VaultHeader({
               <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-gray-400 border border-white/5 font-medium">
                 Markdown &amp; Dataview
               </span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                v0.1.0
+              </span>
             </div>
             <p className="text-xs text-gray-500">
               Live markdown kitchen companion for Obsidian
