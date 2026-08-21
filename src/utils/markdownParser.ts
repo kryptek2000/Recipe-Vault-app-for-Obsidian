@@ -1,5 +1,5 @@
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
-import { ObsidianRecipe, ParsedIngredient, RecipeStep, ObsidianCallout } from '../types';
+import { ObsidianRecipe, ParsedIngredient, RecipeStep, ObsidianCallout, MealPlanDay, ShoppingCategoryGroup } from '../types';
 import { getRecipeImage } from './imageHelper';
 
 /**
@@ -706,4 +706,157 @@ export function serializeRecipeToObsidianMarkdown(recipe: Partial<ObsidianRecipe
   }
 
   return md;
+}
+
+/**
+ * Serializes Weekly Meal Plan into an Obsidian Markdown note
+ */
+export function serializeMealPlanToMarkdown(mealPlan: MealPlanDay[]): string {
+  const frontmatterObj = {
+    type: 'meal-plan',
+    updated: new Date().toISOString().split('T')[0],
+  };
+
+  const yamlStr = yamlDump(frontmatterObj, { indent: 2 }).trim();
+  let md = `---\n${yamlStr}\n---\n\n# 📅 Weekly Meal Plan\n\n`;
+
+  mealPlan.forEach((day) => {
+    md += `## ${day.dayName}\n`;
+    if (day.breakfast?.recipeTitle) {
+      md += `- **Breakfast**: [[${day.breakfast.recipeTitle}]]\n`;
+    }
+    if (day.lunch?.recipeTitle) {
+      md += `- **Lunch**: [[${day.lunch.recipeTitle}]]\n`;
+    }
+    if (day.dinner?.recipeTitle) {
+      md += `- **Dinner**: [[${day.dinner.recipeTitle}]]\n`;
+    }
+    if (!day.breakfast?.recipeTitle && !day.lunch?.recipeTitle && !day.dinner?.recipeTitle) {
+      md += `*No meals planned*\n`;
+    }
+    md += '\n';
+  });
+
+  return md;
+}
+
+/**
+ * Parses an Obsidian Meal Plan markdown note back into MealPlanDay[]
+ */
+export function parseMealPlanFromMarkdown(text: string): MealPlanDay[] {
+  const days: MealPlanDay[] = [
+    { dayName: 'Monday' },
+    { dayName: 'Tuesday' },
+    { dayName: 'Wednesday' },
+    { dayName: 'Thursday' },
+    { dayName: 'Friday' },
+    { dayName: 'Saturday' },
+    { dayName: 'Sunday' },
+  ];
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const lines = text.split('\n');
+  let currentDayIndex = -1;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (line.startsWith('## ')) {
+      const headingName = line.replace(/^##\s+/, '').trim();
+      const matchedIdx = dayNames.findIndex(
+        (d) => d.toLowerCase() === headingName.toLowerCase()
+      );
+      if (matchedIdx >= 0) {
+        currentDayIndex = matchedIdx;
+      }
+    } else if (currentDayIndex >= 0 && line.startsWith('- **')) {
+      const match = line.match(/^-\s*\*\*([A-Za-z]+)\*\*:\s*(.*)$/);
+      if (match) {
+        const slotType = match[1].toLowerCase() as 'breakfast' | 'lunch' | 'dinner';
+        const rawContent = match[2].trim();
+        // Extract wikilink title [[Recipe Name]]
+        const titleMatch = rawContent.match(/\[\[([^\]]+)\]\]/);
+        const recipeTitle = titleMatch ? titleMatch[1].trim() : rawContent.replace(/^[-\s*]+/, '').trim();
+
+        if (recipeTitle && ['breakfast', 'lunch', 'dinner'].includes(slotType)) {
+          days[currentDayIndex][slotType] = {
+            recipeTitle,
+          };
+        }
+      }
+    }
+  }
+
+  return days;
+}
+
+/**
+ * Serializes Shopping List into an Obsidian Markdown task checklist note
+ */
+export function serializeShoppingListToMarkdown(groups: ShoppingCategoryGroup[]): string {
+  const frontmatterObj = {
+    type: 'shopping-list',
+    updated: new Date().toISOString().split('T')[0],
+  };
+
+  const yamlStr = yamlDump(frontmatterObj, { indent: 2 }).trim();
+  let md = `---\n${yamlStr}\n---\n\n# 🛒 Grocery Shopping List\n\n`;
+
+  groups.forEach((group) => {
+    if (group.items && group.items.length > 0) {
+      md += `## ${group.category}\n`;
+      group.items.forEach((item) => {
+        const check = item.isChecked ? '[x]' : '[ ]';
+        md += `- ${check} ${item.text}\n`;
+      });
+      md += '\n';
+    }
+  });
+
+  return md;
+}
+
+/**
+ * Parses an Obsidian Shopping List markdown note into ShoppingCategoryGroup[]
+ */
+export function parseShoppingListFromMarkdown(text: string): ShoppingCategoryGroup[] {
+  const groups: ShoppingCategoryGroup[] = [];
+  const lines = text.split('\n');
+  let currentCategory = 'General';
+  let currentGroup: ShoppingCategoryGroup | null = null;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (line.startsWith('## ') || line.startsWith('### ')) {
+      currentCategory = line.replace(/^#{2,3}\s+/, '').trim();
+      currentGroup = groups.find((g) => g.category === currentCategory) || null;
+      if (!currentGroup) {
+        currentGroup = {
+          category: currentCategory,
+          items: [],
+        };
+        groups.push(currentGroup);
+      }
+    } else if (line.startsWith('- [') || line.startsWith('* [')) {
+      const isChecked = line.startsWith('- [x]') || line.startsWith('- [X]') || line.startsWith('* [x]') || line.startsWith('* [X]');
+      const cleanText = line.replace(/^[-*]\s*\[[ xX]\]\s*/, '').trim();
+
+      if (cleanText) {
+        if (!currentGroup) {
+          currentGroup = {
+            category: currentCategory,
+            items: [],
+          };
+          groups.push(currentGroup);
+        }
+        currentGroup.items.push({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          text: cleanText,
+          recipeSources: [],
+          isChecked,
+        });
+      }
+    }
+  }
+
+  return groups;
 }

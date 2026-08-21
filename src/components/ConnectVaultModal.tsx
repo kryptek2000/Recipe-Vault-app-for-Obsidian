@@ -18,7 +18,7 @@ import {
   Check,
   Globe,
 } from 'lucide-react';
-import { ObsidianRecipe, VaultSyncStatus } from '../types';
+import { ObsidianRecipe, VaultSyncStatus, MealPlanDay, ShoppingCategoryGroup } from '../types';
 import {
   pickVaultDirectory,
   parseUploadedFileList,
@@ -36,6 +36,8 @@ interface ConnectVaultModalProps {
   setVaultStatus: React.Dispatch<React.SetStateAction<VaultSyncStatus>>;
   recipes: ObsidianRecipe[];
   setRecipes: React.Dispatch<React.SetStateAction<ObsidianRecipe[]>>;
+  setMealPlan?: React.Dispatch<React.SetStateAction<MealPlanDay[]>>;
+  setShoppingCategories?: React.Dispatch<React.SetStateAction<ShoppingCategoryGroup[]>>;
   onOpenWebGrabber?: () => void;
 }
 
@@ -46,6 +48,8 @@ export function ConnectVaultModal({
   setVaultStatus,
   recipes,
   setRecipes,
+  setMealPlan,
+  setShoppingCategories,
   onOpenWebGrabber,
 }: ConnectVaultModalProps) {
   const [activeTab, setActiveTab] = useState<'upload' | 'direct' | 'paste' | 'manage'>('upload');
@@ -67,10 +71,14 @@ export function ConnectVaultModal({
     setIsProcessing(true);
     setStatusMessage(null);
     try {
-      const parsedRecipes = await parseUploadedFileList(e.target.files);
-      if (parsedRecipes.length > 0) {
+      const result = await parseUploadedFileList(e.target.files);
+      const parsedRecipes = result.recipes;
+      if (parsedRecipes.length > 0 || result.mealPlan || result.shoppingList) {
         const folderName = e.target.files[0]?.webkitRelativePath?.split('/')[0] || 'Recipes';
-        setRecipes(parsedRecipes);
+        if (parsedRecipes.length > 0) setRecipes(parsedRecipes);
+        if (result.mealPlan && setMealPlan) setMealPlan(result.mealPlan);
+        if (result.shoppingList && setShoppingCategories) setShoppingCategories(result.shoppingList);
+
         setVaultStatus({
           isConnected: true,
           vaultPath: folderName ? `Vault / ${folderName}` : 'Recipes',
@@ -81,7 +89,7 @@ export function ConnectVaultModal({
           type: 'success',
           text: `Successfully imported ${parsedRecipes.length} Obsidian recipe ${
             parsedRecipes.length === 1 ? 'note' : 'notes'
-          } from "${folderName}"!`,
+          }${result.mealPlan ? ' and Meal Plan.md' : ''}${result.shoppingList ? ' and Shopping List.md' : ''} from "${folderName}"!`,
         });
       } else {
         setStatusMessage({
@@ -105,7 +113,11 @@ export function ConnectVaultModal({
     setIsProcessing(true);
     setStatusMessage(null);
     try {
-      const parsedRecipes = await parseUploadedFileList(e.target.files);
+      const result = await parseUploadedFileList(e.target.files);
+      const parsedRecipes = result.recipes;
+      if (result.mealPlan && setMealPlan) setMealPlan(result.mealPlan);
+      if (result.shoppingList && setShoppingCategories) setShoppingCategories(result.shoppingList);
+
       if (parsedRecipes.length > 0) {
         // Merge or replace
         setRecipes((prev) => {
@@ -121,6 +133,11 @@ export function ConnectVaultModal({
         setStatusMessage({
           type: 'success',
           text: `Added ${parsedRecipes.length} recipe note(s) to your culinary vault!`,
+        });
+      } else if (result.mealPlan || result.shoppingList) {
+        setStatusMessage({
+          type: 'success',
+          text: `Updated Meal Plan and Shopping List from Markdown notes!`,
         });
       } else {
         setStatusMessage({
@@ -146,7 +163,11 @@ export function ConnectVaultModal({
     setStatusMessage(null);
 
     try {
-      const parsedRecipes = await parseDroppedFilesAndFolders(e.dataTransfer);
+      const result = await parseDroppedFilesAndFolders(e.dataTransfer);
+      const parsedRecipes = result.recipes;
+      if (result.mealPlan && setMealPlan) setMealPlan(result.mealPlan);
+      if (result.shoppingList && setShoppingCategories) setShoppingCategories(result.shoppingList);
+
       if (parsedRecipes.length > 0) {
         setRecipes((prev) => {
           const map = new Map(prev.map((r) => [r.id, r]));
@@ -161,6 +182,11 @@ export function ConnectVaultModal({
         setStatusMessage({
           type: 'success',
           text: `Successfully parsed and loaded ${parsedRecipes.length} Markdown recipe note(s)!`,
+        });
+      } else if (result.mealPlan || result.shoppingList) {
+        setStatusMessage({
+          type: 'success',
+          text: `Imported vault note configuration!`,
         });
       } else {
         setStatusMessage({
@@ -183,9 +209,12 @@ export function ConnectVaultModal({
     setIsProcessing(true);
     setStatusMessage(null);
     try {
-      const { recipes: loadedRecipes, folderHandle, folderName } = await pickVaultDirectory();
-      if (loadedRecipes.length > 0) {
-        setRecipes(loadedRecipes);
+      const { recipes: loadedRecipes, mealPlan: loadedMealPlan, shoppingList: loadedShoppingList, folderHandle, folderName } = await pickVaultDirectory();
+      if (loadedRecipes.length > 0 || loadedMealPlan || loadedShoppingList) {
+        if (loadedRecipes.length > 0) setRecipes(loadedRecipes);
+        if (loadedMealPlan && setMealPlan) setMealPlan(loadedMealPlan);
+        if (loadedShoppingList && setShoppingCategories) setShoppingCategories(loadedShoppingList);
+
         setVaultStatus({
           isConnected: true,
           vaultPath: folderName ? `Vault / ${folderName}` : 'Obsidian Vault',
@@ -218,7 +247,7 @@ export function ConnectVaultModal({
       } else {
         setStatusMessage({
           type: 'error',
-          text: err.message || 'Could not connect directly. Try the "Import Folder" option above.',
+          text: err?.message || 'Failed to open directory.',
         });
       }
     } finally {

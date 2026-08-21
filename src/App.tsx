@@ -15,7 +15,14 @@ import { cleanRecipeTitle, parseObsidianRecipeMarkdown } from './utils/markdownP
 import {
   pickVaultDirectory,
   saveRecipeToVaultFile,
+  deleteRecipeFromVault,
+  saveMealPlanToVault,
+  saveShoppingListToVault,
   parseUploadedFileList,
+  parseDroppedFilesAndFolders,
+  scanVaultDirectory,
+  getDirectoryHandleFromIDB,
+  clearDirectoryHandleFromIDB,
   isFileSystemAccessSupported,
 } from './utils/vaultFileSystem';
 import { playTimerChime } from './utils/audioAlert';
@@ -33,7 +40,6 @@ import { RecipeEditorModal } from './components/RecipeEditorModal';
 import { ActiveTimersBar } from './components/ActiveTimersBar';
 import { ConnectVaultModal } from './components/ConnectVaultModal';
 import { RecipeGrabberModal } from './components/RecipeGrabberModal';
-import { parseDroppedFilesAndFolders } from './utils/vaultFileSystem';
 
 const INITIAL_FILTERS: FilterState = {
   search: '',
@@ -49,48 +55,45 @@ const INITIAL_FILTERS: FilterState = {
   sortOrder: 'asc',
 };
 
-const INITIAL_SHOPPING_CATEGORIES: ShoppingCategoryGroup[] = [];
-
 const INITIAL_MEAL_PLAN: MealPlanDay[] = [
-  { dayName: 'Monday' },
-  { dayName: 'Tuesday' },
-  { dayName: 'Wednesday' },
-  { dayName: 'Thursday' },
-  { dayName: 'Friday' },
+  { dayName: 'Monday', dinner: { recipeTitle: 'Creamy Tuscan Garlic Chicken' } },
+  { dayName: 'Tuesday', dinner: { recipeTitle: 'Roman Carbonara' } },
+  { dayName: 'Wednesday', dinner: { recipeTitle: 'Thai Green Curry' } },
+  { dayName: 'Thursday', dinner: { recipeTitle: 'Lemon Herb Salmon' } },
+  { dayName: 'Friday', dinner: { recipeTitle: 'Cast-Iron Ribeye' } },
   { dayName: 'Saturday' },
   { dayName: 'Sunday' },
 ];
 
+const INITIAL_SHOPPING_CATEGORIES: ShoppingCategoryGroup[] = [
+  {
+    category: 'Monday Dinner: Creamy Tuscan Garlic Chicken',
+    items: [
+      { id: '1', text: '2 large boneless skinless chicken breasts', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: true },
+      { id: '2', text: '1 tbsp olive oil', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: true },
+      { id: '3', text: '4 cloves garlic, minced', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+      { id: '4', text: '1 cup heavy cream', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+      { id: '5', text: '1/2 cup chicken broth', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+      { id: '6', text: '1/2 cup sun-dried tomatoes, drained and sliced', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+      { id: '7', text: '2 cups fresh baby spinach', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+      { id: '8', text: '1/2 cup freshly grated Parmesan cheese', recipeSources: ['Creamy Tuscan Garlic Chicken'], isChecked: false },
+    ],
+  },
+  {
+    category: 'Tuesday Dinner: Roman Carbonara',
+    items: [
+      { id: '9', text: '400g spaghetti or rigatoni', recipeSources: ['Roman Carbonara'], isChecked: false },
+      { id: '10', text: '200g guanciale (or thick-cut pancetta)', recipeSources: ['Roman Carbonara'], isChecked: false },
+      { id: '11', text: '4 large egg yolks + 1 whole egg', recipeSources: ['Roman Carbonara'], isChecked: false },
+      { id: '12', text: '100g Pecorino Romano, freshly grated', recipeSources: ['Roman Carbonara'], isChecked: false },
+      { id: '13', text: 'Freshly cracked black pepper', recipeSources: ['Roman Carbonara'], isChecked: true },
+    ],
+  },
+];
+
 export default function App() {
-  // 1. Vault Recipes State
+  // 1. Vault Recipes State (Canonical Source: In-Memory working state hydrated from Obsidian vault files)
   const [recipes, setRecipes] = useState<ObsidianRecipe[]>(() => {
-    try {
-      const saved = localStorage.getItem('obsidian_recipes_vault');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((r: ObsidianRecipe) => {
-            if (r.rawMarkdown) {
-              const freshlyParsed = parseObsidianRecipeMarkdown(r.rawMarkdown, r.fileName, r.filePath);
-              return {
-                ...freshlyParsed,
-                id: r.id || freshlyParsed.id,
-                fileHandle: r.fileHandle,
-                isFavorite: r.isFavorite,
-                image: r.image || freshlyParsed.image,
-              };
-            }
-            return {
-              ...r,
-              title: cleanRecipeTitle(r.title, r.fileName),
-              image: r.image || getRecipeImage(r),
-            };
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load recipes from localStorage:', e);
-    }
     return getStarterVaultRecipes();
   });
 
@@ -102,7 +105,7 @@ export default function App() {
     accessType: 'starter_vault',
   });
 
-  // Theme State
+  // Theme State (LocalStorage for UI Preference)
   const [theme, setTheme] = useState<ThemeId>(() => {
     try {
       const saved = localStorage.getItem('obsidian_vault_theme') as ThemeId;
@@ -111,8 +114,15 @@ export default function App() {
     return 'obsidian';
   });
 
-  // Navigation & View State
-  const [activeTab, setActiveTab] = useState<'grid' | 'dataview' | 'mealplan' | 'shopping' | 'themes'>('grid');
+  // Navigation & View State (LocalStorage for Ephemeral UI State)
+  const [activeTab, setActiveTab] = useState<'grid' | 'dataview' | 'mealplan' | 'shopping' | 'themes'>(() => {
+    try {
+      const saved = localStorage.getItem('obsidian_active_tab') as any;
+      if (['grid', 'dataview', 'mealplan', 'shopping', 'themes'].includes(saved)) return saved;
+    } catch (e) {}
+    return 'grid';
+  });
+
   const [selectedRecipe, setSelectedRecipe] = useState<ObsidianRecipe | null>(null);
   const [cookingRecipe, setCookingRecipe] = useState<{ recipe: ObsidianRecipe; servings: number } | null>(null);
 
@@ -128,65 +138,113 @@ export default function App() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
 
-  // Active Timers
-  const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
-
-  // Meal Plan & Shopping List
-  const [mealPlan, setMealPlan] = useState<MealPlanDay[]>(() => {
+  // Active Timers (LocalStorage for active cooking timer timestamps)
+  const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>(() => {
     try {
-      const saved = localStorage.getItem('obsidian_meal_plan');
+      const saved = localStorage.getItem('obsidian_active_cooking_timers');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    return INITIAL_MEAL_PLAN;
+    return [];
   });
 
-  const [shoppingCategories, setShoppingCategories] = useState<ShoppingCategoryGroup[]>(() => {
-    try {
-      const savedMealPlan = localStorage.getItem('obsidian_meal_plan');
-      const parsedPlan: MealPlanDay[] = savedMealPlan ? JSON.parse(savedMealPlan) : INITIAL_MEAL_PLAN;
-      const plannedMealsCount = parsedPlan.reduce(
-        (acc, d) =>
-          acc +
-          (d.breakfast?.recipeTitle ? 1 : 0) +
-          (d.lunch?.recipeTitle ? 1 : 0) +
-          (d.dinner?.recipeTitle ? 1 : 0),
-        0
-      );
-      if (plannedMealsCount === 0) {
-        return [];
+  // Meal Plan & Shopping List (Canonical Source: Vault Notes `Meal Plan.md` & `Shopping List.md`)
+  const [mealPlan, setMealPlan] = useState<MealPlanDay[]>(INITIAL_MEAL_PLAN);
+  const [shoppingCategories, setShoppingCategories] = useState<ShoppingCategoryGroup[]>(INITIAL_SHOPPING_CATEGORIES);
+
+  // 1. Reconnect to IndexedDB directory handle on mount if permission granted
+  useEffect(() => {
+    let isMounted = true;
+    async function restoreVaultConnection() {
+      try {
+        const handle = await getDirectoryHandleFromIDB();
+        if (handle && typeof handle.queryPermission === 'function') {
+          const status = await handle.queryPermission({ mode: 'readwrite' });
+          if (status === 'granted') {
+            const scan = await scanVaultDirectory(handle);
+            if (isMounted) {
+              if (scan.recipes.length > 0) setRecipes(scan.recipes);
+              if (scan.mealPlan) setMealPlan(scan.mealPlan);
+              if (scan.shoppingList) setShoppingCategories(scan.shoppingList);
+
+              setVaultStatus({
+                isConnected: true,
+                vaultPath: scan.folderName ? `Vault / ${scan.folderName}` : 'Obsidian Vault',
+                fileCount: scan.recipes.length,
+                accessType: 'filesystem_api',
+                folderHandle: handle,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Auto-reconnect vault check:', err);
       }
-      const savedShopping = localStorage.getItem('obsidian_shopping_list');
-      if (savedShopping) return JSON.parse(savedShopping);
-    } catch (e) {}
-    return INITIAL_SHOPPING_CATEGORIES;
-  });
+    }
+    restoreVaultConnection();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  // Save to LocalStorage on changes
+  // 2. Background Re-Sync on Window Focus: Live updates from Obsidian desktop
   useEffect(() => {
-    try {
-      localStorage.setItem('obsidian_recipes_vault', JSON.stringify(recipes));
-      setVaultStatus((prev) => ({ ...prev, fileCount: recipes.length }));
-    } catch (e) {}
-  }, [recipes]);
+    const handleWindowFocus = async () => {
+      if (vaultStatus.isConnected && vaultStatus.folderHandle && vaultStatus.accessType === 'filesystem_api') {
+        try {
+          const scan = await scanVaultDirectory(vaultStatus.folderHandle);
+          if (scan.recipes.length > 0) {
+            setRecipes(scan.recipes);
+            setVaultStatus((prev) => ({ ...prev, fileCount: scan.recipes.length }));
+          }
+          if (scan.mealPlan) setMealPlan(scan.mealPlan);
+          if (scan.shoppingList) setShoppingCategories(scan.shoppingList);
+        } catch (err) {
+          console.warn('Background vault scan on focus failed:', err);
+        }
+      }
+    };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('obsidian_meal_plan', JSON.stringify(mealPlan));
-    } catch (e) {}
-  }, [mealPlan]);
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [vaultStatus]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('obsidian_shopping_list', JSON.stringify(shoppingCategories));
-    } catch (e) {}
-  }, [shoppingCategories]);
-
+  // 3. UI Preferences to LocalStorage
   useEffect(() => {
     try {
       localStorage.setItem('obsidian_vault_theme', theme);
       document.documentElement.setAttribute('data-theme', theme);
     } catch (e) {}
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('obsidian_active_tab', activeTab);
+    } catch (e) {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('obsidian_active_cooking_timers', JSON.stringify(activeTimers));
+    } catch (e) {}
+  }, [activeTimers]);
+
+  // 4. Auto-save Meal Plan note directly to disk in the Obsidian vault if connected
+  useEffect(() => {
+    if (vaultStatus.isConnected && vaultStatus.folderHandle) {
+      saveMealPlanToVault(mealPlan, vaultStatus.folderHandle).catch((e) =>
+        console.warn('Auto-saving Meal Plan.md to vault failed:', e)
+      );
+    }
+  }, [mealPlan, vaultStatus]);
+
+  // 5. Auto-save Shopping List note directly to disk in the Obsidian vault if connected
+  useEffect(() => {
+    if (vaultStatus.isConnected && vaultStatus.folderHandle) {
+      saveShoppingListToVault(shoppingCategories, vaultStatus.folderHandle).catch((e) =>
+        console.warn('Auto-saving Shopping List.md to vault failed:', e)
+      );
+    }
+  }, [shoppingCategories, vaultStatus]);
 
   // Timers Background Interval Engine
   useEffect(() => {
@@ -240,14 +298,19 @@ export default function App() {
   const handleUploadFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     try {
-      const parsedRecipes = await parseUploadedFileList(e.target.files);
-      if (parsedRecipes.length > 0) {
-        setRecipes(parsedRecipes);
+      const parsed = await parseUploadedFileList(e.target.files);
+      if (parsed.recipes.length > 0) {
+        setRecipes(parsed.recipes);
+      }
+      if (parsed.mealPlan) setMealPlan(parsed.mealPlan);
+      if (parsed.shoppingList) setShoppingCategories(parsed.shoppingList);
+
+      if (parsed.recipes.length > 0 || parsed.mealPlan || parsed.shoppingList) {
         setVaultStatus((prev) => ({
           ...prev,
           isConnected: true,
-          fileCount: parsedRecipes.length,
-          accessType: 'drag_drop',
+          fileCount: parsed.recipes.length,
+          accessType: 'uploaded_folder',
         }));
       }
     } catch (err) {
@@ -271,10 +334,21 @@ export default function App() {
       setSelectedRecipe(savedRecipe);
     }
 
-    // Try saving directly to vault disk
+    // Save directly to Obsidian vault disk note
     await saveRecipeToVaultFile(savedRecipe, vaultStatus.folderHandle);
     setIsEditorOpen(false);
     setEditingRecipe(null);
+  };
+
+  // Delete Recipe
+  const handleDeleteRecipe = async (recipeToDelete: ObsidianRecipe) => {
+    setRecipes((prev) => prev.filter((r) => r.id !== recipeToDelete.id && r.fileName !== recipeToDelete.fileName));
+    if (selectedRecipe && (selectedRecipe.id === recipeToDelete.id || selectedRecipe.fileName === recipeToDelete.fileName)) {
+      setSelectedRecipe(null);
+    }
+    if (vaultStatus.folderHandle) {
+      await deleteRecipeFromVault(recipeToDelete, vaultStatus.folderHandle);
+    }
   };
 
   // Start Cooking Mode
@@ -743,17 +817,22 @@ export default function App() {
         e.preventDefault();
         setIsWindowDragging(false);
         try {
-          const parsed = await parseDroppedFilesAndFolders(e.dataTransfer);
-          if (parsed.length > 0) {
+          const result = await parseDroppedFilesAndFolders(e.dataTransfer);
+          if (result.recipes.length > 0) {
             setRecipes((prev) => {
               const map = new Map(prev.map((r) => [r.id, r]));
-              parsed.forEach((r) => map.set(r.id, r));
+              result.recipes.forEach((r) => map.set(r.id, r));
               return Array.from(map.values());
             });
+          }
+          if (result.mealPlan) setMealPlan(result.mealPlan);
+          if (result.shoppingList) setShoppingCategories(result.shoppingList);
+
+          if (result.recipes.length > 0 || result.mealPlan || result.shoppingList) {
             setVaultStatus((prev) => ({
               ...prev,
               isConnected: true,
-              fileCount: prev.fileCount + parsed.length,
+              fileCount: prev.fileCount + result.recipes.length,
             }));
           }
         } catch (err) {
@@ -772,7 +851,7 @@ export default function App() {
               Drop Obsidian Recipe Files or Folder
             </h3>
             <p className="text-xs text-gray-400">
-              Release to instantly parse recipes, YAML frontmatter, wikilinks &amp; tags into your Culinary Vault.
+              Release to instantly parse recipes, Meal Plan.md, and Shopping List.md into your Culinary Vault.
             </p>
           </div>
         </div>
@@ -797,8 +876,22 @@ export default function App() {
           setIsEditorOpen(true);
         }}
         onOpenRecipeGrabber={() => setIsGrabberOpen(true)}
-        onRefreshVault={() => {
-          setRecipes(getStarterVaultRecipes());
+        onRefreshVault={async () => {
+          if (vaultStatus.isConnected && vaultStatus.folderHandle) {
+            try {
+              const scan = await scanVaultDirectory(vaultStatus.folderHandle);
+              if (scan.recipes.length > 0) setRecipes(scan.recipes);
+              if (scan.mealPlan) setMealPlan(scan.mealPlan);
+              if (scan.shoppingList) setShoppingCategories(scan.shoppingList);
+              setVaultStatus((prev) => ({ ...prev, fileCount: scan.recipes.length }));
+            } catch (err) {
+              console.warn('Re-scan failed:', err);
+            }
+          } else {
+            setRecipes(getStarterVaultRecipes());
+            setMealPlan(INITIAL_MEAL_PLAN);
+            setShoppingCategories(INITIAL_SHOPPING_CATEGORIES);
+          }
         }}
       />
 
@@ -826,6 +919,7 @@ export default function App() {
               setEditingRecipe(recipe);
               setIsEditorOpen(true);
             }}
+            onDeleteRecipe={handleDeleteRecipe}
             onAddToMealPlan={(recipe) => {
               handleAddToMealPlan(recipe);
               setSelectedRecipe(null);
@@ -976,6 +1070,8 @@ export default function App() {
         setVaultStatus={setVaultStatus}
         recipes={recipes}
         setRecipes={setRecipes}
+        setMealPlan={setMealPlan}
+        setShoppingCategories={setShoppingCategories}
         onOpenWebGrabber={() => setIsGrabberOpen(true)}
       />
 

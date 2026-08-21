@@ -26,6 +26,7 @@ import {
   Sparkles,
   Utensils,
   Share2,
+  Trash2,
 } from 'lucide-react';
 import { ObsidianRecipe, ParsedIngredient } from '../types';
 import { scaleIngredientText } from '../utils/markdownParser';
@@ -41,6 +42,7 @@ interface RecipeDetailViewProps {
   onAddToShoppingList: (recipe: ObsidianRecipe, ingredients: string[]) => void;
   onStartTimer: (recipeTitle: string, minutes: number, label: string) => void;
   onFilterByWikilink?: (wikilink: string) => void;
+  onDeleteRecipe?: (recipe: ObsidianRecipe) => void;
 }
 
 export function RecipeDetailView({
@@ -52,6 +54,7 @@ export function RecipeDetailView({
   onAddToShoppingList,
   onStartTimer,
   onFilterByWikilink,
+  onDeleteRecipe,
 }: RecipeDetailViewProps) {
   const [currentServings, setCurrentServings] = useState<number>(recipe.servings || 4);
   const [activeViewMode, setActiveViewMode] = useState<'visual' | 'markdown'>('visual');
@@ -59,6 +62,7 @@ export function RecipeDetailView({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [isAddedToShop, setIsAddedToShop] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const baseServings = recipe.servings || 4;
 
@@ -182,6 +186,23 @@ export function RecipeDetailView({
             <Edit3 className="w-3.5 h-3.5" />
             <span>Edit</span>
           </button>
+
+          {/* Delete Note */}
+          {onDeleteRecipe && (
+            <button
+              id="delete-recipe-btn"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete "${recipe.title}" (${recipe.fileName}) from the vault?`)) {
+                  onDeleteRecipe(recipe);
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 text-xs font-medium transition-colors"
+              title="Delete recipe note from vault"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          )}
 
           {/* Export .md file */}
           <button
