@@ -1,7 +1,7 @@
 import { ObsidianRecipe } from '../types';
 import { parseObsidianRecipeMarkdown } from '../utils/markdownParser';
 
-export const DEFAULT_VAULT_PATH = '/home/sid/Obsidian Vault/6 - Full Notes/Food/Recipes';
+export const DEFAULT_VAULT_PATH = 'Obsidian Vault / Recipes';
 
 export const STARTER_RECIPE_MARKDOWNS: { fileName: string; markdown: string }[] = [
   {
@@ -462,7 +462,7 @@ created: 2026-08-01
 
 export function getStarterVaultRecipes(): ObsidianRecipe[] {
   return STARTER_RECIPE_MARKDOWNS.map((item) => {
-    const filePath = `6 - Full Notes/Food/Recipes/${item.fileName}`;
+    const filePath = `Recipes/${item.fileName}`;
     return parseObsidianRecipeMarkdown(item.markdown, item.fileName, filePath);
   });
 }

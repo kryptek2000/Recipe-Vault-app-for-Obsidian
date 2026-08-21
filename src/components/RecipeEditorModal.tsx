@@ -144,7 +144,7 @@ export function RecipeEditorModal({
       finalRecipe = parseObsidianRecipeMarkdown(
         md,
         safeName,
-        initialRecipe?.filePath || `6 - Full Notes/Food/Recipes/${safeName}`
+        initialRecipe?.filePath || `Recipes/${safeName}`
       );
     }
 
@@ -169,7 +169,7 @@ export function RecipeEditorModal({
                 {initialRecipe ? `Edit: ${initialRecipe.title}` : 'Create New Obsidian Recipe Note'}
               </h2>
               <span className="text-xs text-gray-500 font-mono">
-                /6 - Full Notes/Food/Recipes/{fileName}
+                Recipes/{fileName}
               </span>
             </div>
           </div>

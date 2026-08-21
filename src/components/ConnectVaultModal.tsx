@@ -73,7 +73,7 @@ export function ConnectVaultModal({
         setRecipes(parsedRecipes);
         setVaultStatus({
           isConnected: true,
-          vaultPath: `/home/sid/Obsidian Vault/6 - Full Notes/Food/${folderName}`,
+          vaultPath: folderName ? `Vault / ${folderName}` : 'Recipes',
           fileCount: parsedRecipes.length,
           accessType: 'uploaded_folder',
         });
@@ -188,7 +188,7 @@ export function ConnectVaultModal({
         setRecipes(loadedRecipes);
         setVaultStatus({
           isConnected: true,
-          vaultPath: `/home/sid/Obsidian Vault/6 - Full Notes/Food/${folderName}`,
+          vaultPath: folderName ? `Vault / ${folderName}` : 'Obsidian Vault',
           fileCount: loadedRecipes.length,
           accessType: 'filesystem_api',
           folderHandle,
@@ -234,7 +234,7 @@ export function ConnectVaultModal({
     }
     try {
       const fileName = pasteTitle.trim() ? `${pasteTitle.trim().replace(/\.md$/, '')}.md` : 'Pasted Recipe.md';
-      const parsed = parseObsidianRecipeMarkdown(pasteContent, fileName, `6 - Full Notes/Food/Recipes/${fileName}`);
+      const parsed = parseObsidianRecipeMarkdown(pasteContent, fileName, `Recipes/${fileName}`);
       setRecipes((prev) => [parsed, ...prev.filter((r) => r.id !== parsed.id)]);
       setStatusMessage({
         type: 'success',
@@ -439,7 +439,7 @@ export function ConnectVaultModal({
                     Drag &amp; Drop your Obsidian Recipe folder or .md files here
                   </h4>
                   <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-                    Drop your entire <span className="font-mono text-amber-300">Food/Recipes</span> directory or multiple recipe notes. We will parse YAML frontmatter, Dataview fields, wikilinks, and checklist ingredients automatically.
+                    Drop your entire <span className="font-mono text-amber-300">Recipes</span> directory or multiple recipe notes. We will parse YAML frontmatter, Dataview fields, wikilinks, and checklist ingredients automatically.
                   </p>
                 </div>
 

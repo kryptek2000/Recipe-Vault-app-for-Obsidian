@@ -223,7 +223,7 @@ export default function App() {
         setRecipes(loadedRecipes);
         setVaultStatus({
           isConnected: true,
-          vaultPath: `/home/sid/Obsidian Vault/6 - Full Notes/Food/Recipes (${folderName})`,
+          vaultPath: folderName ? `Vault / ${folderName}` : 'Obsidian Vault',
           fileCount: loadedRecipes.length,
           accessType: 'filesystem_api',
           folderHandle,
