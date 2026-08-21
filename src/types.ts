@@ -4,8 +4,20 @@ export interface ParsedIngredient {
   unit?: string;
   name: string;
   wikilink?: string;
+  wikilinkTarget?: string;
+  wikilinkAlias?: string;
   note?: string;
   isChecked?: boolean;
+}
+
+export interface RecipeNutrition {
+  calories?: number;
+  protein?: number; // in grams
+  carbohydrates?: number; // in grams
+  fat?: number; // in grams
+  fiber?: number; // in grams
+  sodium?: number; // in milligrams
+  confidenceNote?: string;
 }
 
 export interface RecipeStep {
@@ -37,6 +49,7 @@ export interface ObsidianRecipe {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   rating: number; // 1-5
   calories?: string | number;
+  nutrition?: RecipeNutrition;
   source?: string;
   image?: string;
   ingredients: ParsedIngredient[];
@@ -48,6 +61,18 @@ export interface ObsidianRecipe {
   lastModified?: string;
   fileHandle?: any; // Native FileSystemFileHandle if connected
   isFavorite?: boolean;
+}
+
+export interface VaultNote {
+  id: string;
+  fileName: string;
+  filePath: string;
+  rawMarkdown: string;
+  title: string;
+  tags: string[];
+  frontmatter?: Record<string, any>;
+  content: string;
+  fileHandle?: any;
 }
 
 export interface MealPlanSlot {

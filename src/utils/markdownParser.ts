@@ -1,5 +1,14 @@
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
-import { ObsidianRecipe, ParsedIngredient, RecipeStep, ObsidianCallout, MealPlanDay, ShoppingCategoryGroup } from '../types';
+import {
+  ObsidianRecipe,
+  ParsedIngredient,
+  RecipeStep,
+  ObsidianCallout,
+  MealPlanDay,
+  ShoppingCategoryGroup,
+  RecipeNutrition,
+  VaultNote,
+} from '../types';
 import { getRecipeImage } from './imageHelper';
 
 /**
@@ -332,9 +341,22 @@ export function extractCalories(
 export function parseIngredientLine(line: string): ParsedIngredient {
   const cleanLine = line.replace(/^[-*+]\s*(\[[ xX]\]\s*)?/, '').trim();
 
-  // Wikilink extraction: [[Ingredient Name]]
+  // Wikilink extraction: [[Ingredient Name]] or [[Ingredient/Path|Alias]]
   const wikilinkMatch = cleanLine.match(/\[\[(.*?)\]\]/);
-  const wikilink = wikilinkMatch ? wikilinkMatch[1] : undefined;
+  const wikilink = wikilinkMatch ? wikilinkMatch[1].trim() : undefined;
+  let wikilinkTarget: string | undefined = undefined;
+  let wikilinkAlias: string | undefined = undefined;
+
+  if (wikilink) {
+    if (wikilink.includes('|')) {
+      const parts = wikilink.split('|');
+      wikilinkTarget = parts[0].trim();
+      wikilinkAlias = parts.slice(1).join('|').trim();
+    } else {
+      wikilinkTarget = wikilink;
+      wikilinkAlias = wikilink;
+    }
+  }
 
   // Common units regex
   const units = '(?:tbsp|tablespoon|tablespoons|tsp|teaspoon|teaspoons|cup|cups|oz|ounce|ounces|lb|lbs|pound|pounds|g|gram|grams|kg|kilogram|kilograms|ml|milliliter|milliliters|l|liter|liters|clove|cloves|pinch|pinches|dash|dashes|slice|slices|can|cans|stalk|stalks|bunch|bunches|sprig|sprigs|piece|pieces|head|heads|handful|handfuls)';
@@ -355,6 +377,8 @@ export function parseIngredientLine(line: string): ParsedIngredient {
       unit: unit.toLowerCase(),
       name: name || cleanLine,
       wikilink,
+      wikilinkTarget,
+      wikilinkAlias,
       isChecked: false,
     };
   }
@@ -365,6 +389,8 @@ export function parseIngredientLine(line: string): ParsedIngredient {
     unit: '',
     name: cleanLine,
     wikilink,
+    wikilinkTarget,
+    wikilinkAlias,
     isChecked: false,
   };
 }
@@ -536,6 +562,40 @@ export function parseObsidianRecipeMarkdown(
   const servings = extractServings(frontmatter, dataviewFields, content);
   const calories = extractCalories(frontmatter, dataviewFields, content);
 
+  // Nutrition parsing (frontmatter.nutrition or top-level macro fields)
+  let nutrition: RecipeNutrition | undefined = undefined;
+  if (frontmatter.nutrition && typeof frontmatter.nutrition === 'object') {
+    const fn = frontmatter.nutrition;
+    const numCal = typeof fn.calories === 'number' ? fn.calories : typeof fn.calories === 'string' ? parseFloat(fn.calories) : undefined;
+    const numProt = typeof fn.protein === 'number' ? fn.protein : typeof fn.protein === 'string' ? parseFloat(fn.protein) : undefined;
+    const numCarb = typeof fn.carbohydrates === 'number' ? fn.carbohydrates : typeof fn.carbs === 'number' ? fn.carbs : typeof fn.carbohydrates === 'string' ? parseFloat(fn.carbohydrates) : typeof fn.carbs === 'string' ? parseFloat(fn.carbs) : undefined;
+    const numFat = typeof fn.fat === 'number' ? fn.fat : typeof fn.fat === 'string' ? parseFloat(fn.fat) : undefined;
+    const numFiber = typeof fn.fiber === 'number' ? fn.fiber : typeof fn.fiber === 'string' ? parseFloat(fn.fiber) : undefined;
+    const numSodium = typeof fn.sodium === 'number' ? fn.sodium : typeof fn.sodium === 'string' ? parseFloat(fn.sodium) : undefined;
+    const confNote = typeof fn.confidenceNote === 'string' ? fn.confidenceNote : undefined;
+
+    if (numCal !== undefined || numProt !== undefined || numCarb !== undefined || numFat !== undefined || numFiber !== undefined || numSodium !== undefined) {
+      nutrition = {
+        calories: numCal ?? (typeof calories === 'number' ? calories : typeof calories === 'string' ? parseFloat(calories) : undefined),
+        protein: numProt,
+        carbohydrates: numCarb,
+        fat: numFat,
+        fiber: numFiber,
+        sodium: numSodium,
+        confidenceNote: confNote,
+      };
+    }
+  } else if (frontmatter.protein || frontmatter.carbs || frontmatter.carbohydrates || frontmatter.fat || frontmatter.fiber || frontmatter.sodium) {
+    nutrition = {
+      calories: typeof calories === 'number' ? calories : typeof calories === 'string' ? parseFloat(calories) : undefined,
+      protein: typeof frontmatter.protein === 'number' ? frontmatter.protein : typeof frontmatter.protein === 'string' ? parseFloat(frontmatter.protein) : undefined,
+      carbohydrates: typeof frontmatter.carbohydrates === 'number' ? frontmatter.carbohydrates : typeof frontmatter.carbs === 'number' ? frontmatter.carbs : typeof frontmatter.carbs === 'string' ? parseFloat(frontmatter.carbs) : undefined,
+      fat: typeof frontmatter.fat === 'number' ? frontmatter.fat : typeof frontmatter.fat === 'string' ? parseFloat(frontmatter.fat) : undefined,
+      fiber: typeof frontmatter.fiber === 'number' ? frontmatter.fiber : typeof frontmatter.fiber === 'string' ? parseFloat(frontmatter.fiber) : undefined,
+      sodium: typeof frontmatter.sodium === 'number' ? frontmatter.sodium : typeof frontmatter.sodium === 'string' ? parseFloat(frontmatter.sodium) : undefined,
+    };
+  }
+
   // 9. Difficulty & Rating & Source & Image
   const difficulty = (frontmatter.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard';
   const rating = typeof frontmatter.rating === 'number' ? Math.min(5, Math.max(1, frontmatter.rating)) : 5;
@@ -643,6 +703,7 @@ export function parseObsidianRecipeMarkdown(
     difficulty,
     rating,
     calories,
+    nutrition,
     source,
     image,
     ingredients,
@@ -674,6 +735,23 @@ export function serializeRecipeToObsidianMarkdown(recipe: Partial<ObsidianRecipe
   if (recipe.servings !== undefined && recipe.servings !== null) frontmatterObj.servings = recipe.servings;
   if (recipe.calories !== undefined && recipe.calories !== null && String(recipe.calories).trim()) {
     frontmatterObj.calories = recipe.calories;
+  }
+  if (recipe.nutrition && typeof recipe.nutrition === 'object') {
+    const nut: Record<string, any> = {};
+    if (recipe.nutrition.calories !== undefined && recipe.nutrition.calories !== null) nut.calories = recipe.nutrition.calories;
+    if (recipe.nutrition.protein !== undefined && recipe.nutrition.protein !== null) nut.protein = recipe.nutrition.protein;
+    if (recipe.nutrition.carbohydrates !== undefined && recipe.nutrition.carbohydrates !== null) nut.carbohydrates = recipe.nutrition.carbohydrates;
+    if (recipe.nutrition.fat !== undefined && recipe.nutrition.fat !== null) nut.fat = recipe.nutrition.fat;
+    if (recipe.nutrition.fiber !== undefined && recipe.nutrition.fiber !== null) nut.fiber = recipe.nutrition.fiber;
+    if (recipe.nutrition.sodium !== undefined && recipe.nutrition.sodium !== null) nut.sodium = recipe.nutrition.sodium;
+    if (recipe.nutrition.confidenceNote && recipe.nutrition.confidenceNote.trim()) nut.confidenceNote = recipe.nutrition.confidenceNote.trim();
+
+    if (Object.keys(nut).length > 0) {
+      frontmatterObj.nutrition = nut;
+      if (!frontmatterObj.calories && nut.calories) {
+        frontmatterObj.calories = nut.calories;
+      }
+    }
   }
   if (recipe.source && recipe.source.trim()) frontmatterObj.source = recipe.source.trim();
   if (recipe.image && recipe.image.trim()) frontmatterObj.image = recipe.image.trim();
@@ -708,7 +786,14 @@ export function serializeRecipeToObsidianMarkdown(recipe: Partial<ObsidianRecipe
       } else {
         const amt = ing.amount ? `${formatAmount(ing.amount)} ` : '';
         const unit = ing.unit ? `${ing.unit} ` : '';
-        const link = ing.wikilink ? `[[${ing.wikilink}]]` : ing.name;
+        let link = ing.name;
+        if (ing.wikilinkTarget) {
+          link = ing.wikilinkAlias && ing.wikilinkAlias !== ing.wikilinkTarget
+            ? `[[${ing.wikilinkTarget}|${ing.wikilinkAlias}]]`
+            : `[[${ing.wikilinkTarget}]]`;
+        } else if (ing.wikilink) {
+          link = `[[${ing.wikilink}]]`;
+        }
         md += `- ${check} ${amt}${unit}${link}\n`;
       }
     });
@@ -734,6 +819,64 @@ export function serializeRecipeToObsidianMarkdown(recipe: Partial<ObsidianRecipe
   }
 
   return md;
+}
+
+/**
+ * Parses generic Obsidian Markdown notes (e.g. ingredient guides, kitchen references)
+ */
+export function parseVaultNoteMarkdown(
+  rawMarkdown: string,
+  fileName: string = 'Untitled Note.md',
+  filePath: string = ''
+): VaultNote {
+  let frontmatter: Record<string, any> = {};
+  let content = rawMarkdown;
+
+  const fmMatch = rawMarkdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (fmMatch) {
+    try {
+      const parsedYaml = yamlLoad(fmMatch[1]);
+      if (typeof parsedYaml === 'object' && parsedYaml !== null) {
+        frontmatter = parsedYaml as Record<string, any>;
+      }
+    } catch (e) {
+      // silent fallback
+    }
+    content = rawMarkdown.slice(fmMatch[0].length);
+  }
+
+  let title = frontmatter.title;
+  if (!title) {
+    const h1Match = content.match(/^#\s+(.+)$/m);
+    if (h1Match) {
+      title = h1Match[1].trim();
+    } else {
+      title = fileName.replace(/\.md$/i, '');
+    }
+  }
+
+  let rawTags: any[] = [];
+  if (Array.isArray(frontmatter.tags)) {
+    rawTags = frontmatter.tags;
+  } else if (typeof frontmatter.tags === 'string') {
+    rawTags = frontmatter.tags.split(',').map((t) => t.trim());
+  } else if (frontmatter.tag) {
+    rawTags = Array.isArray(frontmatter.tag) ? frontmatter.tag : [frontmatter.tag];
+  }
+
+  const tags = Array.from(new Set(rawTags.map((t) => String(t).replace(/^#/, '').trim()))).filter(Boolean);
+  const id = filePath || fileName.replace(/\.md$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  return {
+    id,
+    fileName,
+    filePath: filePath || fileName,
+    rawMarkdown,
+    title,
+    tags,
+    frontmatter,
+    content: content.trim(),
+  };
 }
 
 /**

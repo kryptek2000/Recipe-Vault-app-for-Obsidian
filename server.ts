@@ -3,7 +3,8 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { grabRecipeFromWeb } from "./server/recipeGrabber.js";
-import { recipeImportRateLimiter, getClientIp } from "./server/rateLimiter.js";
+import { estimateRecipeNutrition } from "./server/nutritionEstimator.js";
+import { recipeImportRateLimiter, nutritionEstimateRateLimiter, getClientIp } from "./server/rateLimiter.js";
 
 dotenv.config();
 
@@ -142,6 +143,62 @@ app.post("/api/grab-recipe", recipeImportRateLimiter, async (req, res) => {
   }
 });
 
+// AI Nutrition Estimator endpoint with rate limiting & input validation
+app.post("/api/estimate-nutrition", nutritionEstimateRateLimiter, async (req, res) => {
+  const clientIp = getClientIp(req);
+
+  try {
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({
+        error: "Invalid request payload.",
+      });
+    }
+
+    const { servings, ingredients } = req.body;
+    const rawTitle = req.body.title || req.body.recipeTitle;
+    const title = typeof rawTitle === "string" ? rawTitle.slice(0, 200) : undefined;
+
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({
+        error: "Please provide a list of ingredients to estimate nutrition.",
+      });
+    }
+
+    if (ingredients.length > 100) {
+      return res.status(400).json({
+        error: "Too many ingredients provided. Maximum allowed is 100 ingredients.",
+      });
+    }
+
+    const nutrition = await estimateRecipeNutrition({
+      title: typeof title === "string" ? title.slice(0, 200) : undefined,
+      servings: typeof servings === "number" ? servings : undefined,
+      ingredients,
+    });
+
+    return res.json({ success: true, nutrition });
+  } catch (error: any) {
+    const errorMsg = error?.message || "";
+    console.error(`[${new Date().toISOString()}] [Client: ${clientIp}] Nutrition Estimation Error:`, errorMsg);
+
+    if (errorMsg.includes("not configured") || errorMsg.includes("GEMINI_API_KEY")) {
+      return res.status(503).json({
+        error: "Gemini API key is not configured on the server. Please check your environment variables.",
+      });
+    }
+
+    if (errorMsg.includes("provide a list") || errorMsg.includes("valid ingredient")) {
+      return res.status(400).json({
+        error: errorMsg,
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to estimate recipe nutrition. Please verify ingredient measurements and try again.",
+    });
+  }
+});
+
 // Serve frontend with Vite in dev, static files in prod
 async function start() {
   if (process.env.NODE_ENV !== "production") {
@@ -159,7 +216,7 @@ async function start() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Obsidian Vault Recipe Server running on http://localhost:${PORT}`);
+    console.log(`The Kitchen Codex Server running on http://localhost:${PORT}`);
   });
 }
 

@@ -49,7 +49,15 @@ export function RecipeEditorModal({
   );
   const [rating, setRating] = useState(initialRecipe?.rating || 5);
   const [calories, setCalories] = useState(initialRecipe?.calories?.toString() || '');
+  const [protein, setProtein] = useState<string>(initialRecipe?.nutrition?.protein?.toString() || '');
+  const [carbs, setCarbs] = useState<string>(initialRecipe?.nutrition?.carbohydrates?.toString() || '');
+  const [fat, setFat] = useState<string>(initialRecipe?.nutrition?.fat?.toString() || '');
+  const [fiber, setFiber] = useState<string>(initialRecipe?.nutrition?.fiber?.toString() || '');
+  const [sodium, setSodium] = useState<string>(initialRecipe?.nutrition?.sodium?.toString() || '');
   const [image, setImage] = useState(initialRecipe?.image || '');
+  const [isEstimatingNutrition, setIsEstimatingNutrition] = useState(false);
+  const [nutritionError, setNutritionError] = useState<string | null>(null);
+  const [nutritionSuccess, setNutritionSuccess] = useState(false);
 
   // Callout
   const [calloutTitle, setCalloutTitle] = useState(
@@ -108,6 +116,15 @@ export function RecipeEditorModal({
 
     const parsedServings = typeof servings === 'number' ? servings : parseInt(String(servings), 10);
 
+    const parsedProtein = protein.trim() ? parseFloat(protein.trim()) : undefined;
+    const parsedCarbs = carbs.trim() ? parseFloat(carbs.trim()) : undefined;
+    const parsedFat = fat.trim() ? parseFloat(fat.trim()) : undefined;
+    const parsedFiber = fiber.trim() ? parseFloat(fiber.trim()) : undefined;
+    const parsedSodium = sodium.trim() ? parseFloat(sodium.trim()) : undefined;
+    const parsedCalNum = calories.trim() ? parseInt(calories.trim().replace(/\D/g, ''), 10) : undefined;
+
+    const hasNutrition = parsedCalNum || parsedProtein || parsedCarbs || parsedFat || parsedFiber || parsedSodium;
+
     const partial: Partial<ObsidianRecipe> = {
       title: title || 'Untitled Recipe',
       tags: tags.length > 0 ? tags : ['food/recipes'],
@@ -118,7 +135,17 @@ export function RecipeEditorModal({
       servings: !isNaN(parsedServings) && parsedServings > 0 ? parsedServings : undefined,
       difficulty,
       rating,
-      calories: calories.trim() || undefined,
+      calories: calories.trim() || (parsedCalNum ? parsedCalNum.toString() : undefined),
+      nutrition: hasNutrition
+        ? {
+            calories: parsedCalNum,
+            protein: parsedProtein,
+            carbohydrates: parsedCarbs,
+            fat: parsedFat,
+            fiber: parsedFiber,
+            sodium: parsedSodium,
+          }
+        : undefined,
       image: image || undefined,
       callouts: calloutContent ? [{ type: 'tip', title: calloutTitle, content: calloutContent }] : [],
       ingredients: parsedIngs,
@@ -127,6 +154,55 @@ export function RecipeEditorModal({
     };
 
     return serializeRecipeToObsidianMarkdown(partial);
+  };
+
+  const handleEstimateNutrition = async () => {
+    setIsEstimatingNutrition(true);
+    setNutritionError(null);
+    setNutritionSuccess(false);
+
+    try {
+      const lines = ingredientsText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      if (lines.length === 0) {
+        throw new Error('Please add ingredients before estimating nutrition.');
+      }
+
+      const numServings = typeof servings === 'number' ? servings : parseInt(String(servings), 10) || 4;
+
+      const res = await fetch('/api/estimate-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || 'Recipe',
+          servings: numServings,
+          ingredients: lines,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to estimate nutrition.');
+      }
+
+      if (data.nutrition) {
+        if (data.nutrition.calories !== undefined) setCalories(data.nutrition.calories.toString());
+        if (data.nutrition.protein !== undefined) setProtein(data.nutrition.protein.toString());
+        if (data.nutrition.carbohydrates !== undefined) setCarbs(data.nutrition.carbohydrates.toString());
+        if (data.nutrition.fat !== undefined) setFat(data.nutrition.fat.toString());
+        if (data.nutrition.fiber !== undefined) setFiber(data.nutrition.fiber.toString());
+        if (data.nutrition.sodium !== undefined) setSodium(data.nutrition.sodium.toString());
+        setNutritionSuccess(true);
+        setTimeout(() => setNutritionSuccess(false), 3000);
+      }
+    } catch (err: any) {
+      setNutritionError(err.message || 'Error estimating nutrition.');
+    } finally {
+      setIsEstimatingNutrition(false);
+    }
   };
 
   const handleSave = () => {
@@ -364,6 +440,93 @@ export function RecipeEditorModal({
                     <option value="Medium">Medium</option>
                     <option value="Hard">Hard</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Nutrition & Macros Breakdown Box */}
+              <div className="p-3.5 rounded-xl bg-[#0F0F0F] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-white">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Nutrition &amp; Macros (per serving)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleEstimateNutrition}
+                    disabled={isEstimatingNutrition}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-colors disabled:opacity-50"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isEstimatingNutrition ? 'animate-spin' : ''}`} />
+                    <span>{isEstimatingNutrition ? 'Analyzing Ingredients...' : 'Estimate Nutrition (AI)'}</span>
+                  </button>
+                </div>
+
+                {nutritionError && (
+                  <p className="text-[11px] text-rose-300 bg-rose-950/40 p-2 rounded-lg border border-rose-800/40">
+                    {nutritionError}
+                  </p>
+                )}
+                {nutritionSuccess && (
+                  <p className="text-[11px] text-emerald-300 bg-emerald-950/40 p-2 rounded-lg border border-emerald-800/40">
+                    Nutrition &amp; macros successfully estimated and populated!
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Protein (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={protein}
+                      onChange={(e) => setProtein(e.target.value)}
+                      placeholder="e.g. 32"
+                      className="w-full bg-[#0C0C0C] border border-white/10 rounded-lg p-2 text-emerald-400 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Carbs (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={carbs}
+                      onChange={(e) => setCarbs(e.target.value)}
+                      placeholder="e.g. 45"
+                      className="w-full bg-[#0C0C0C] border border-white/10 rounded-lg p-2 text-blue-400 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Fat (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={fat}
+                      onChange={(e) => setFat(e.target.value)}
+                      placeholder="e.g. 18"
+                      className="w-full bg-[#0C0C0C] border border-white/10 rounded-lg p-2 text-amber-400 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Fiber (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={fiber}
+                      onChange={(e) => setFiber(e.target.value)}
+                      placeholder="e.g. 6"
+                      className="w-full bg-[#0C0C0C] border border-white/10 rounded-lg p-2 text-purple-400 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">Sodium (mg)</label>
+                    <input
+                      type="number"
+                      value={sodium}
+                      onChange={(e) => setSodium(e.target.value)}
+                      placeholder="e.g. 580"
+                      className="w-full bg-[#0C0C0C] border border-white/10 rounded-lg p-2 text-orange-400 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -1,7 +1,7 @@
-import { ObsidianRecipe } from '../types';
-import { parseObsidianRecipeMarkdown } from '../utils/markdownParser';
+import { ObsidianRecipe, VaultNote } from '../types';
+import { parseObsidianRecipeMarkdown, parseVaultNoteMarkdown } from '../utils/markdownParser';
 
-export const DEFAULT_VAULT_PATH = 'Obsidian Vault / Recipes';
+export const DEFAULT_VAULT_PATH = 'Obsidian Vault / Kitchen Codex';
 
 export const STARTER_RECIPE_MARKDOWNS: { fileName: string; markdown: string }[] = [
   {
@@ -466,3 +466,185 @@ export function getStarterVaultRecipes(): ObsidianRecipe[] {
     return parseObsidianRecipeMarkdown(item.markdown, item.fileName, filePath);
   });
 }
+
+export const STARTER_VAULT_NOTES: { fileName: string; markdown: string }[] = [
+  {
+    fileName: 'Garlic.md',
+    markdown: `---
+title: Garlic
+tags:
+  - ingredients/aromatics
+  - pantry/staple
+  - alliums
+category: Ingredient Guide
+origin: Central Asia
+flavor_profile: Pungent, savory, sweet and caramelized when roasted
+storage: Cool, dry, dark, well-ventilated pantry basket (avoid plastic bags)
+---
+
+# Garlic
+
+> [!tip] Cutting Technique & Pungency
+> The finer garlic is chopped, grated, or microplaned, the more *alliin* reacts with *allinase* to form **allicin**, producing maximum pungency. Whole crushed cloves give a delicate, perfume-like aroma, while grated garlic gives fiery pungency.
+
+## 🧄 Overview
+Garlic (*Allium sativum*) is the foundation of savory cooking across Mediterranean, Asian, Middle Eastern, Latin American, and French cuisines.
+
+## 🥘 Culinary Uses & Pairings
+- **Soffritto & Mirepoix**: Sauté gently in extra virgin olive oil or butter at low temperatures to avoid bitter browning.
+- **Roasted Garlic**: Wrap whole heads in foil with olive oil and roast at 400°F (200°C) for 45 minutes until spreadably soft and sweet.
+- **Best Flavor Pairings**: Rosemary, thyme, basil, tomatoes, butter, white wine, lemon, soy sauce, ginger, chili flakes.
+`,
+  },
+  {
+    fileName: 'Parmigiano-Reggiano.md',
+    markdown: `---
+title: Parmigiano-Reggiano
+tags:
+  - ingredients/dairy
+  - italian/dop
+  - pantry/cheese
+category: Ingredient Guide
+origin: Parma, Reggio Emilia, Modena (Italy) - DOP Protected
+aging: 24 to 36 months (Stagionato)
+flavor_profile: Rich, nutty, crystalline umami with hints of pineapple and dried fruit
+storage: Wrapped tightly in wax paper or parchment inside cheese drawer (36-40°F)
+---
+
+# Parmigiano-Reggiano
+
+> [!tip] Save the Rinds!
+> Never throw away the hard rind of genuine Parmigiano-Reggiano. Toss frozen rinds directly into simmering tomato sauces, minestrone, or broths for rich umami depth.
+
+## 🧀 Overview
+Known as the "King of Cheeses", genuine Parmigiano-Reggiano DOP is an unpasteurized cow's milk hard cheese aged for at least 12 to 36 months. The crunchy crystals throughout are **tyrosine crystals**, indicating slow, master artisanal aging.
+
+## 🥘 Culinary Uses & Pairings
+- **Pasta Emulsions**: Microplane finely over pastas with starchy cooking water to create glossy, creamy sauces without heavy cream.
+- **Finishing & Garnish**: Shave over fresh arugula salads, carpaccio, or risottos.
+- **Best Flavor Pairings**: Aceto Balsamico Tradizionale, prosciutto, walnuts, ripe pears, dry sparkling prosecco.
+`,
+  },
+  {
+    fileName: 'Guanciale.md',
+    markdown: `---
+title: Guanciale
+tags:
+  - ingredients/cured-meat
+  - italian/charcuterie
+  - pantry/salumi
+category: Ingredient Guide
+origin: Lazio & Umbria, Central Italy
+cut: Cured pork jowl (cheek)
+flavor_profile: Deeply savory, aromatic, peppery with clean silky rendered fat
+storage: Whole piece wrapped in butcher paper in refrigerator up to 3 months
+---
+
+# Guanciale
+
+> [!tip] Low & Slow Rendering
+> Start diced guanciale in a cold dry skillet over gentle medium-low heat. This renders out translucent golden fat while crisping the exterior into crackling without burning the black pepper crust.
+
+## 🥓 Overview
+Guanciale is traditional Italian cured pork cheek rubbed with salt, cracked black pepper, and herbs like thyme and juniper, then aged for 3 to 6 months. It provides the essential fat and umami backbone for Roman classics like *Carbonara*, *Amatriciana*, and *Gricia*.
+
+## 🥘 Traditional Roman Four Pastas
+1. **Pasta alla Gricia**: Guanciale + Pecorino Romano + Black Pepper
+2. **Spaghetti alla Carbonara**: Guanciale + Egg Yolks + Pecorino Romano + Black Pepper
+3. **Bucatini all'Amatriciana**: Guanciale + San Marzano Tomatoes + Pecorino Romano + White Wine
+4. **Pasta alla Cacio e Pepe**: Pecorino Romano + Toasted Black Pepper
+`,
+  },
+  {
+    fileName: 'Ceremonial Grade Matcha Powder.md',
+    markdown: `---
+title: Ceremonial Grade Matcha Powder
+tags:
+  - ingredients/tea
+  - japanese/traditional
+  - superfood
+category: Ingredient Guide
+origin: Uji, Kyoto & Nishio, Aichi (Japan)
+cultivar: Tencha leaves (shade-grown Camellia sinensis)
+flavor_profile: Vibrant vegetal sweetness, velvety umami (L-theanine), zero bitterness
+storage: Airtight opaque tin in refrigerator; consume within 60 days of opening
+---
+
+# Ceremonial Grade Matcha Powder
+
+> [!tip] Whisking Temperature
+> Never use boiling water with ceremonial matcha! Water temperature should be around 165°F–175°F (75°C–80°C). Whisk with a bamboo *chasen* in an energetic "W" or "M" motion to create silky micro-foam.
+
+## 🍵 Overview
+Ceremonial matcha is made from young shade-grown spring tea leaves, de-veined and stone-ground into an ultra-fine 5-micron emerald powder.
+
+## 🥘 Culinary Applications
+- **Matcha Lattes**: Whisk with warm oat milk or whole milk with a dash of vanilla or honey.
+- **Baking & Pastry**: Lava cakes, financiers, macarons, tiramisu, and ice creams.
+- **Pairings**: White chocolate, dark chocolate, sweet red bean (anko), yuzu, black sesame.
+`,
+  },
+  {
+    fileName: 'Extra Virgin Olive Oil.md',
+    markdown: `---
+title: Extra Virgin Olive Oil
+tags:
+  - ingredients/oils
+  - pantry/essential
+  - mediterranean
+category: Ingredient Guide
+origin: Mediterranean Basin (Italy, Greece, Spain)
+acidity: < 0.8% free acidity (Cold extracted)
+flavor_profile: Fruity, grassy, peppery finish (oleocanthal)
+storage: Dark glass bottle away from heat and sunlight; do not store directly next to the stove
+---
+
+# Extra Virgin Olive Oil
+
+> [!tip] Finishing vs. Cooking
+> Use high-quality single-estate EVOO as a raw finishing oil drizzled over hot soups, warm grilled sourdough, steaks, or fresh mozzarella to preserve delicate polyphenols and floral aromas.
+
+## 🫒 Overview
+The purest cold-pressed extraction of olive fruit without chemical processing or excessive heat. Rich in heart-healthy monounsaturated fats and antioxidants.
+`,
+  },
+  {
+    fileName: 'Sourdough Starter.md',
+    markdown: `---
+title: Sourdough Starter
+tags:
+  - baking/fermentation
+  - pantry/living-culture
+  - wild-yeast
+category: Baking Reference
+hydration: 100% (equal parts flour and water by weight)
+organisms: Wild yeasts (*Saccharomyces exiguus*) & Lactic acid bacteria (*Lactobacillus sanfranciscensis*)
+storage: Room temperature (daily feeding) or Refrigerator (weekly feeding)
+---
+
+# Sourdough Starter (Levain)
+
+> [!tip] The Float Test
+> Drop a teaspoon of active bubbly starter into a glass of room-temperature water. If it floats on top, the aeration and gas production are at peak ripeness for mixing your dough!
+
+## 🥖 Feeding Ratio (1:2:2 or 1:1:1)
+- 20g Mature Starter
+- 40g Unbleached Bread Flour / Whole Rye Flour (50/50 blend)
+- 40g Filtered Water at 78°F (25°C)
+
+## 🕒 Activity Timeline
+- **Hours 1–2**: Inactive lag phase
+- **Hours 3–5**: Rapid volume expansion and bubbling
+- **Hours 5–7**: Peak dome height (ideal for levain build)
+- **Hours 8+**: Collapse and hungry sour liquid (*hooch*) formation
+`,
+  },
+];
+
+export function getStarterVaultNotes(): VaultNote[] {
+  return STARTER_VAULT_NOTES.map((item) => {
+    const filePath = `Notes/${item.fileName}`;
+    return parseVaultNoteMarkdown(item.markdown, item.fileName, filePath);
+  });
+}
+

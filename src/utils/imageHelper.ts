@@ -1,5 +1,5 @@
 /**
- * High-quality food photography helper for Obsidian Recipe Vault
+ * High-quality food photography helper for The Kitchen Codex
  */
 
 export const DEFAULT_FOOD_IMAGES: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { ObsidianRecipe, MealPlanDay, ShoppingCategoryGroup } from '../types';
+import { ObsidianRecipe, MealPlanDay, ShoppingCategoryGroup, VaultNote } from '../types';
 import {
   parseObsidianRecipeMarkdown,
   serializeRecipeToObsidianMarkdown,
@@ -6,6 +6,7 @@ import {
   serializeMealPlanToMarkdown,
   parseShoppingListFromMarkdown,
   serializeShoppingListToMarkdown,
+  parseVaultNoteMarkdown,
 } from './markdownParser';
 
 const IDB_NAME = 'ObsidianRecipeVaultDB';
@@ -93,6 +94,7 @@ export async function clearDirectoryHandleFromIDB(): Promise<void> {
 
 export interface VaultScanResult {
   recipes: ObsidianRecipe[];
+  notes?: VaultNote[];
   mealPlan?: MealPlanDay[];
   shoppingList?: ShoppingCategoryGroup[];
   folderHandle?: any;
@@ -104,6 +106,7 @@ export interface VaultScanResult {
  */
 export async function scanVaultDirectory(dirHandle: any): Promise<VaultScanResult> {
   const recipes: ObsidianRecipe[] = [];
+  const notes: VaultNote[] = [];
   let foundMealPlan: MealPlanDay[] | undefined = undefined;
   let foundShoppingList: ShoppingCategoryGroup[] | undefined = undefined;
 
@@ -129,7 +132,14 @@ export async function scanVaultDirectory(dirHandle: any): Promise<VaultScanResul
           } else {
             const parsed = parseObsidianRecipeMarkdown(text, entry.name, entryPath);
             parsed.fileHandle = entry;
-            recipes.push(parsed);
+            // Check if it's a recipe or general reference note
+            if (parsed.ingredients.length > 0 || parsed.instructions.length > 0 || parsed.tags.some(t => t.toLowerCase().includes('recipe') || t.toLowerCase().includes('food'))) {
+              recipes.push(parsed);
+            } else {
+              const genericNote = parseVaultNoteMarkdown(text, entry.name, entryPath);
+              genericNote.fileHandle = entry;
+              notes.push(genericNote);
+            }
           }
         } catch (e) {
           console.warn('Failed to parse file:', entry.name, e);
@@ -144,6 +154,7 @@ export async function scanVaultDirectory(dirHandle: any): Promise<VaultScanResul
 
   return {
     recipes,
+    notes,
     mealPlan: foundMealPlan,
     shoppingList: foundShoppingList,
     folderHandle: dirHandle,
@@ -300,10 +311,12 @@ export function downloadMarkdownFile(filename: string, content: string) {
  */
 export async function parseUploadedFileList(fileList: FileList | File[]): Promise<{
   recipes: ObsidianRecipe[];
+  notes?: VaultNote[];
   mealPlan?: MealPlanDay[];
   shoppingList?: ShoppingCategoryGroup[];
 }> {
   const recipes: ObsidianRecipe[] = [];
+  const notes: VaultNote[] = [];
   let foundMealPlan: MealPlanDay[] | undefined = undefined;
   let foundShoppingList: ShoppingCategoryGroup[] | undefined = undefined;
 
@@ -326,11 +339,15 @@ export async function parseUploadedFileList(fileList: FileList | File[]): Promis
         foundShoppingList = parseShoppingListFromMarkdown(text);
       } else {
         const parsed = parseObsidianRecipeMarkdown(text, file.name, relativePath);
-        recipes.push(parsed);
+        if (parsed.ingredients.length > 0 || parsed.instructions.length > 0 || parsed.tags.some(t => t.toLowerCase().includes('recipe') || t.toLowerCase().includes('food'))) {
+          recipes.push(parsed);
+        } else {
+          notes.push(parseVaultNoteMarkdown(text, file.name, relativePath));
+        }
       }
     }
   }
-  return { recipes, mealPlan: foundMealPlan, shoppingList: foundShoppingList };
+  return { recipes, notes, mealPlan: foundMealPlan, shoppingList: foundShoppingList };
 }
 
 /**
@@ -338,10 +355,12 @@ export async function parseUploadedFileList(fileList: FileList | File[]): Promis
  */
 export async function parseDroppedFilesAndFolders(dataTransfer: DataTransfer): Promise<{
   recipes: ObsidianRecipe[];
+  notes?: VaultNote[];
   mealPlan?: MealPlanDay[];
   shoppingList?: ShoppingCategoryGroup[];
 }> {
   const recipes: ObsidianRecipe[] = [];
+  const notes: VaultNote[] = [];
   let foundMealPlan: MealPlanDay[] | undefined = undefined;
   let foundShoppingList: ShoppingCategoryGroup[] | undefined = undefined;
 
@@ -360,7 +379,11 @@ export async function parseDroppedFilesAndFolders(dataTransfer: DataTransfer): P
                 foundShoppingList = parseShoppingListFromMarkdown(text);
               } else {
                 const parsed = parseObsidianRecipeMarkdown(text, file.name, path ? `${path}/${file.name}` : file.name);
-                recipes.push(parsed);
+                if (parsed.ingredients.length > 0 || parsed.instructions.length > 0 || parsed.tags.some(t => t.toLowerCase().includes('recipe') || t.toLowerCase().includes('food'))) {
+                  recipes.push(parsed);
+                } else {
+                  notes.push(parseVaultNoteMarkdown(text, file.name, path ? `${path}/${file.name}` : file.name));
+                }
               }
             } catch (err) {
               console.warn('Failed to parse dropped file:', file.name, err);
@@ -416,10 +439,11 @@ export async function parseDroppedFilesAndFolders(dataTransfer: DataTransfer): P
   } else if (dataTransfer.files && dataTransfer.files.length > 0) {
     const res = await parseUploadedFileList(dataTransfer.files);
     recipes.push(...res.recipes);
+    if (res.notes) notes.push(...res.notes);
     if (res.mealPlan) foundMealPlan = res.mealPlan;
     if (res.shoppingList) foundShoppingList = res.shoppingList;
   }
 
-  return { recipes, mealPlan: foundMealPlan, shoppingList: foundShoppingList };
+  return { recipes, notes, mealPlan: foundMealPlan, shoppingList: foundShoppingList };
 }
 

@@ -28,13 +28,17 @@ import {
   Share2,
   Trash2,
 } from 'lucide-react';
-import { ObsidianRecipe, ParsedIngredient } from '../types';
+import { ObsidianRecipe, ParsedIngredient, VaultNote, RecipeNutrition } from '../types';
 import { scaleIngredientText } from '../utils/markdownParser';
 import { downloadMarkdownFile } from '../utils/vaultFileSystem';
 import { getRecipeImage, DEFAULT_FOOD_IMAGES } from '../utils/imageHelper';
+import { RecipeNutritionCard } from './RecipeNutritionCard';
+import { WikilinkPreviewModal } from './WikilinkPreviewModal';
 
 interface RecipeDetailViewProps {
   recipe: ObsidianRecipe;
+  allRecipes?: ObsidianRecipe[];
+  allNotes?: VaultNote[];
   onBack: () => void;
   onStartCooking: (recipe: ObsidianRecipe, servings: number) => void;
   onEditRecipe: (recipe: ObsidianRecipe) => void;
@@ -43,10 +47,15 @@ interface RecipeDetailViewProps {
   onStartTimer: (recipeTitle: string, minutes: number, label: string) => void;
   onFilterByWikilink?: (wikilink: string) => void;
   onDeleteRecipe?: (recipe: ObsidianRecipe) => void;
+  onUpdateNutrition?: (recipe: ObsidianRecipe, nutrition: RecipeNutrition) => Promise<boolean | void> | void;
+  onSelectRecipe?: (recipe: ObsidianRecipe) => void;
+  onSaveNoteToVault?: (note: VaultNote) => Promise<boolean | void>;
 }
 
 export function RecipeDetailView({
   recipe,
+  allRecipes = [],
+  allNotes = [],
   onBack,
   onStartCooking,
   onEditRecipe,
@@ -55,6 +64,9 @@ export function RecipeDetailView({
   onStartTimer,
   onFilterByWikilink,
   onDeleteRecipe,
+  onUpdateNutrition,
+  onSelectRecipe,
+  onSaveNoteToVault,
 }: RecipeDetailViewProps) {
   const [currentServings, setCurrentServings] = useState<number>(recipe.servings || 4);
   const [activeViewMode, setActiveViewMode] = useState<'visual' | 'markdown'>('visual');
@@ -63,6 +75,7 @@ export function RecipeDetailView({
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [isAddedToShop, setIsAddedToShop] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedWikilink, setSelectedWikilink] = useState<{ target: string; alias?: string } | null>(null);
 
   const baseServings = recipe.servings || 4;
 
@@ -428,6 +441,9 @@ export function RecipeDetailView({
                     currentServings
                   );
 
+                  const linkTarget = ing.wikilinkTarget || ing.wikilink;
+                  const linkAlias = ing.wikilinkAlias;
+
                   return (
                     <li
                       key={idx}
@@ -443,18 +459,21 @@ export function RecipeDetailView({
                         className="mt-0.5 rounded text-amber-500 focus:ring-amber-400 bg-[#0C0C0C] border-white/20 cursor-pointer"
                       />
                       <span className="flex-1 leading-snug">
-                        {ing.wikilink ? (
+                        {linkTarget ? (
                           <span>
                             {scaledText.replace(/\[\[(.*?)\]\]/, '')}
                             <span
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onFilterByWikilink?.(ing.wikilink!);
+                                setSelectedWikilink({
+                                  target: linkTarget,
+                                  alias: linkAlias,
+                                });
                               }}
-                              className="font-mono font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded hover:bg-amber-500/20 ml-1 inline-flex items-center gap-0.5"
-                              title={`Find recipes with [[${ing.wikilink}]]`}
+                              className="font-mono font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded hover:bg-amber-500/20 ml-1 inline-flex items-center gap-0.5 transition-colors cursor-pointer"
+                              title={`Preview intelligence for [[${linkTarget}]]`}
                             >
-                              [[{ing.wikilink}]]
+                              [[{linkAlias ? `${linkTarget}|${linkAlias}` : linkTarget}]]
                             </span>
                           </span>
                         ) : (
@@ -481,6 +500,15 @@ export function RecipeDetailView({
 
             {/* Instructions Column (7 cols) */}
             <div className="lg:col-span-7 space-y-4">
+              {/* Nutrition & Macros Card */}
+              {onUpdateNutrition && (
+                <RecipeNutritionCard
+                  recipe={recipe}
+                  servings={currentServings}
+                  onUpdateNutrition={(nut) => onUpdateNutrition(recipe, nut)}
+                />
+              )}
+
               <div className="bg-[#141414] rounded-2xl border border-white/5 p-5 shadow-xs">
                 <h3 className="text-base font-serif font-bold text-white pb-3 mb-3 border-b border-white/5 flex items-center justify-between">
                   <span>🍳 Instructions & Timers</span>
@@ -542,6 +570,22 @@ export function RecipeDetailView({
           </div>
         </div>
       )}
+
+      {/* Wikilink Intelligence Modal */}
+      <WikilinkPreviewModal
+        target={selectedWikilink?.target || null}
+        alias={selectedWikilink?.alias || null}
+        isOpen={!!selectedWikilink}
+        onClose={() => setSelectedWikilink(null)}
+        recipes={allRecipes}
+        notes={allNotes}
+        onSelectRecipe={(rec) => {
+          setSelectedWikilink(null);
+          onSelectRecipe?.(rec);
+        }}
+        onFilterByWikilink={onFilterByWikilink}
+        onSaveNoteToVault={onSaveNoteToVault}
+      />
     </div>
   );
 }

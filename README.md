@@ -1,12 +1,12 @@
-# 🍳 Obsidian Vault Recipe Manager & Cooking Companion `v0.1.1`
+# 🍳 The Kitchen Codex `v0.2.0`
 
-[![Version](https://img.shields.io/badge/version-0.1.1-amber.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-amber.svg)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A markdown-native recipe manager, meal planner, and interactive cooking companion built specifically for **Obsidian** vaults. Read, edit, sync, and cook directly from your Obsidian `.md` recipe collection with YAML frontmatter, Dataview tags, wikilinks, dynamic portion scaling, multi-step cooking timers, and AI-powered web recipe scraping.
+A markdown-native recipe manager, meal planner, culinary knowledge base, and interactive cooking companion built specifically for **Obsidian** vaults. Read, edit, sync, and cook directly from your Obsidian `.md` recipe collection with YAML frontmatter, Dataview tags, wikilinks (`[[Ingredient]]`, `[[Target|Alias]]`), AI nutrition estimation, dynamic portion scaling, multi-step cooking timers, and AI-powered web recipe scraping.
 
 <p align="center">
-  <img src="./src/assets/images/app_screenshot_1787266053153.jpg" alt="Obsidian Vault Recipe Manager & Cooking Companion UI Screenshot" width="100%" />
+  <img src="./src/assets/images/app_screenshot_1787266053153.jpg" alt="The Kitchen Codex UI Screenshot" width="100%" />
 </p>
 
 ---
@@ -17,6 +17,16 @@ A markdown-native recipe manager, meal planner, and interactive cooking companio
 - **Direct Vault Connection**: Connect local Obsidian vault folders using the File System Access API (`showDirectoryPicker`) for direct reading and writing.
 - **Drag-and-Drop Vault Importer**: Drag individual `.md` notes or entire vault folders to import and parse recipes instantly.
 - **Bi-directional Compatibility**: Export, download, or copy standardized Obsidian Markdown files with YAML frontmatter, wikilinks (`[[Garlic]]`), Dataview tags, and callouts (`> [!tip]`).
+
+### 🧠 Interactive Wikilink Intelligence & Note Knowledge Base
+- **Live Wikilink Previews**: Click any `[[Ingredient Note]]` or `[[Target|Alias]]` across recipe cards, ingredient lists, instructions, or callouts to preview contextual notes.
+- **Backlink Discovery**: Explore all recipes in your vault that share the same ingredient or technique.
+- **Direct Note Authoring**: Create new Markdown knowledge notes directly into your Obsidian `Notes/` folder with YAML frontmatter from the preview modal.
+
+### 🥗 AI Nutritional Estimation
+- **Macronutrient & Calorie Breakdown**: Server-side nutrition analysis powered by Gemini 3.7 Flash, calculating calories, protein, carbohydrates, fat, dietary fiber, and sodium per serving.
+- **YAML Frontmatter Persistence**: Serializes nutritional data directly into note frontmatter for interoperability with Dataview.
+- **Portion Scaling Compatibility**: Dynamically calculates and displays macro values scaled to current portions.
 
 ### 🌐 AI Web Recipe Grabber
 - **URL & Text Importer**: Paste any recipe website URL, raw HTML, or recipe text to convert it into a structured Obsidian markdown note.
@@ -43,12 +53,8 @@ A markdown-native recipe manager, meal planner, and interactive cooking companio
 ### 🎨 Obsidian Community Themes
 - Switch between custom Obsidian themes:
   - **Obsidian Default Dark** (Classic Obsidian aesthetic)
-  - **Minimalist Clean Light**
-  - **Nord Frost** (Arctic blue tones)
-  - **Dracula** (Vibrant purple & dark violet)
-  - **Cyberpunk Neon** (High contrast glowing amber/cyan)
-  - **Rosé Pine** (Cozy muted vintage tones)
-  - **Solarized Dark**
+  - **Warm Parchment** (Warm editorial parchment paper aesthetic)
+  - **Nordic Sage** (Calm Scandinavian herbal & pine aesthetic)
 
 ---
 
@@ -204,7 +210,13 @@ favorite: true
 
 ## 📌 Changelog
 
-### `v0.1.1` (Current Release)
+### `v0.2.0` (Current Release)
+- **Interactive Wikilink Intelligence**: Full support for wikilinks (`[[Ingredient]]`, `[[Target|Alias]]`) with contextual modal previews, backlink recipe exploration, and direct Markdown note creation in the vault.
+- **AI Nutrition Estimation**: Server-side macro analysis powered by Gemini 3.7 Flash, calculating calories, protein, carbs, fat, fiber, and sodium per serving with YAML frontmatter persistence.
+- **Obsidian Theme System**: Support for Obsidian Dark, Warm Parchment, and Nordic Sage themes with responsive contrast.
+- **Official Rebranding**: Fully rebranded to **The Kitchen Codex** with modernized vault navigation and metadata.
+
+### `v0.1.1`
 - **Fractional & Unicode Scaling**: Enhanced portion scaling engine with full unicode fraction support (`½`, `⅓`, `⅔`, `¼`, `¾`, `⅛`, `⅜`, `⅝`, `⅞`) and mixed-fraction parsing across recipes.
 - **Recipe Editor Continuity**: Preserved note IDs and file system handles seamlessly when toggling between visual form and raw Markdown editor tabs.
 - **Audio Chime Reliability**: Added Web Audio API context auto-resumption for timer alerts on mobile devices and background tabs.

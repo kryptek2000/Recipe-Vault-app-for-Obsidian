@@ -8,10 +8,12 @@ import {
   MealPlanSlot,
   ShoppingCategoryGroup,
   ThemeId,
+  VaultNote,
+  RecipeNutrition,
 } from './types';
-import { DEFAULT_VAULT_PATH, getStarterVaultRecipes } from './data/starterVault';
+import { DEFAULT_VAULT_PATH, getStarterVaultRecipes, getStarterVaultNotes } from './data/starterVault';
 import { getRecipeImage } from './utils/imageHelper';
-import { cleanRecipeTitle, parseObsidianRecipeMarkdown } from './utils/markdownParser';
+import { cleanRecipeTitle, parseObsidianRecipeMarkdown, serializeRecipeToObsidianMarkdown } from './utils/markdownParser';
 import {
   pickVaultDirectory,
   saveRecipeToVaultFile,
@@ -97,11 +99,16 @@ export default function App() {
     return getStarterVaultRecipes();
   });
 
+  // Vault Notes State (Non-recipe notes in the Obsidian vault, like ingredients, techniques, wine guides)
+  const [notes, setNotes] = useState<VaultNote[]>(() => {
+    return getStarterVaultNotes();
+  });
+
   // Vault Sync Status
   const [vaultStatus, setVaultStatus] = useState<VaultSyncStatus>({
     isConnected: false,
     vaultPath: DEFAULT_VAULT_PATH,
-    fileCount: recipes.length,
+    fileCount: recipes.length + notes.length,
     accessType: 'starter_vault',
   });
 
@@ -163,13 +170,14 @@ export default function App() {
             const scan = await scanVaultDirectory(handle);
             if (isMounted) {
               if (scan.recipes.length > 0) setRecipes(scan.recipes);
+              if (scan.notes.length > 0) setNotes(scan.notes);
               if (scan.mealPlan) setMealPlan(scan.mealPlan);
               if (scan.shoppingList) setShoppingCategories(scan.shoppingList);
 
               setVaultStatus({
                 isConnected: true,
                 vaultPath: scan.folderName ? `Vault / ${scan.folderName}` : 'Obsidian Vault',
-                fileCount: scan.recipes.length,
+                fileCount: scan.recipes.length + scan.notes.length,
                 accessType: 'filesystem_api',
                 folderHandle: handle,
               });
@@ -194,8 +202,11 @@ export default function App() {
           const scan = await scanVaultDirectory(vaultStatus.folderHandle);
           if (scan.recipes.length > 0) {
             setRecipes(scan.recipes);
-            setVaultStatus((prev) => ({ ...prev, fileCount: scan.recipes.length }));
           }
+          if (scan.notes.length > 0) {
+            setNotes(scan.notes);
+          }
+          setVaultStatus((prev) => ({ ...prev, fileCount: scan.recipes.length + scan.notes.length }));
           if (scan.mealPlan) setMealPlan(scan.mealPlan);
           if (scan.shoppingList) setShoppingCategories(scan.shoppingList);
         } catch (err) {
@@ -276,13 +287,14 @@ export default function App() {
   // Connect local folder via File System Access API
   const handleConnectVault = async () => {
     try {
-      const { recipes: loadedRecipes, folderHandle, folderName } = await pickVaultDirectory();
-      if (loadedRecipes.length > 0) {
-        setRecipes(loadedRecipes);
+      const { recipes: loadedRecipes, notes: loadedNotes, folderHandle, folderName } = await pickVaultDirectory();
+      if (loadedRecipes.length > 0 || loadedNotes.length > 0) {
+        if (loadedRecipes.length > 0) setRecipes(loadedRecipes);
+        if (loadedNotes.length > 0) setNotes(loadedNotes);
         setVaultStatus({
           isConnected: true,
           vaultPath: folderName ? `Vault / ${folderName}` : 'Obsidian Vault',
-          fileCount: loadedRecipes.length,
+          fileCount: loadedRecipes.length + loadedNotes.length,
           accessType: 'filesystem_api',
           folderHandle,
         });
@@ -302,14 +314,17 @@ export default function App() {
       if (parsed.recipes.length > 0) {
         setRecipes(parsed.recipes);
       }
+      if (parsed.notes && parsed.notes.length > 0) {
+        setNotes(parsed.notes);
+      }
       if (parsed.mealPlan) setMealPlan(parsed.mealPlan);
       if (parsed.shoppingList) setShoppingCategories(parsed.shoppingList);
 
-      if (parsed.recipes.length > 0 || parsed.mealPlan || parsed.shoppingList) {
+      if (parsed.recipes.length > 0 || parsed.mealPlan || parsed.shoppingList || (parsed.notes && parsed.notes.length > 0)) {
         setVaultStatus((prev) => ({
           ...prev,
           isConnected: true,
-          fileCount: parsed.recipes.length,
+          fileCount: parsed.recipes.length + (parsed.notes?.length || 0),
           accessType: 'uploaded_folder',
         }));
       }
@@ -338,6 +353,56 @@ export default function App() {
     await saveRecipeToVaultFile(savedRecipe, vaultStatus.folderHandle);
     setIsEditorOpen(false);
     setEditingRecipe(null);
+  };
+
+  // Update Nutrition on a recipe and save to Obsidian Markdown frontmatter
+  const handleUpdateNutrition = async (recipe: ObsidianRecipe, nutrition: RecipeNutrition) => {
+    const updatedRecipe: ObsidianRecipe = {
+      ...recipe,
+      nutrition,
+      calories: nutrition.calories !== undefined ? nutrition.calories.toString() : recipe.calories,
+    };
+    updatedRecipe.rawMarkdown = serializeRecipeToObsidianMarkdown(updatedRecipe);
+
+    setRecipes((prev) => prev.map((r) => (r.id === updatedRecipe.id ? updatedRecipe : r)));
+    if (selectedRecipe && selectedRecipe.id === updatedRecipe.id) {
+      setSelectedRecipe(updatedRecipe);
+    }
+
+    if (vaultStatus.folderHandle) {
+      await saveRecipeToVaultFile(updatedRecipe, vaultStatus.folderHandle);
+    }
+  };
+
+  // Save or Create a Vault Note (e.g. ingredient or technique created from wikilink modal)
+  const handleSaveNoteToVault = async (note: VaultNote) => {
+    setNotes((prev) => {
+      const idx = prev.findIndex((n) => n.id === note.id || n.fileName.toLowerCase() === note.fileName.toLowerCase());
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = note;
+        return next;
+      }
+      return [note, ...prev];
+    });
+
+    if (vaultStatus.folderHandle) {
+      try {
+        const fileName = note.fileName.endsWith('.md') ? note.fileName : `${note.fileName}.md`;
+        let targetDir = vaultStatus.folderHandle;
+        try {
+          targetDir = await vaultStatus.folderHandle.getDirectoryHandle('Notes', { create: true });
+        } catch (e) {
+          targetDir = vaultStatus.folderHandle;
+        }
+        const fileHandle = await targetDir.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(note.rawMarkdown);
+        await writable.close();
+      } catch (err) {
+        console.warn('Could not write note to vault filesystem:', err);
+      }
+    }
   };
 
   // Delete Recipe
@@ -825,14 +890,21 @@ export default function App() {
               return Array.from(map.values());
             });
           }
+          if (result.notes && result.notes.length > 0) {
+            setNotes((prev) => {
+              const map = new Map(prev.map((n) => [n.id, n]));
+              result.notes.forEach((n) => map.set(n.id, n));
+              return Array.from(map.values());
+            });
+          }
           if (result.mealPlan) setMealPlan(result.mealPlan);
           if (result.shoppingList) setShoppingCategories(result.shoppingList);
 
-          if (result.recipes.length > 0 || result.mealPlan || result.shoppingList) {
+          if (result.recipes.length > 0 || result.mealPlan || result.shoppingList || (result.notes && result.notes.length > 0)) {
             setVaultStatus((prev) => ({
               ...prev,
               isConnected: true,
-              fileCount: prev.fileCount + result.recipes.length,
+              fileCount: prev.fileCount + result.recipes.length + (result.notes?.length || 0),
             }));
           }
         } catch (err) {
@@ -851,7 +923,7 @@ export default function App() {
               Drop Obsidian Recipe Files or Folder
             </h3>
             <p className="text-xs text-gray-400">
-              Release to instantly parse recipes, Meal Plan.md, and Shopping List.md into your Culinary Vault.
+              Release to instantly parse recipes, notes, Meal Plan.md, and Shopping List.md into The Kitchen Codex.
             </p>
           </div>
         </div>
@@ -913,6 +985,8 @@ export default function App() {
         {selectedRecipe ? (
           <RecipeDetailView
             recipe={selectedRecipe}
+            allRecipes={recipes}
+            allNotes={notes}
             onBack={() => setSelectedRecipe(null)}
             onStartCooking={(recipe, servings) => handleStartCooking(recipe, servings)}
             onEditRecipe={(recipe) => {
@@ -927,6 +1001,9 @@ export default function App() {
             onAddToShoppingList={handleAddToShoppingList}
             onStartTimer={handleStartTimer}
             onFilterByWikilink={handleFilterByWikilink}
+            onUpdateNutrition={handleUpdateNutrition}
+            onSelectRecipe={(r) => setSelectedRecipe(r)}
+            onSaveNoteToVault={handleSaveNoteToVault}
           />
         ) : activeTab === 'grid' ? (
           /* Recipe Gallery View */
