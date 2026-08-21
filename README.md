@@ -1,6 +1,6 @@
-# 🍳 Obsidian Vault Recipe Manager & Cooking Companion `v0.1.0`
+# 🍳 Obsidian Vault Recipe Manager & Cooking Companion `v0.1.1`
 
-[![Version](https://img.shields.io/badge/version-0.1.0-amber.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.1.1-amber.svg)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A markdown-native recipe manager, meal planner, and interactive cooking companion built specifically for **Obsidian** vaults. Read, edit, sync, and cook directly from your Obsidian `.md` recipe collection with YAML frontmatter, Dataview tags, wikilinks, dynamic portion scaling, multi-step cooking timers, and AI-powered web recipe scraping.
@@ -199,6 +199,19 @@ favorite: true
 | `npm run start` | Runs the production-bundled server (`dist/server.cjs`) |
 | `npm run lint` | Runs TypeScript type checking (`tsc --noEmit`) |
 | `npm run clean` | Cleans up the `dist` build directory |
+
+---
+
+## 📌 Changelog
+
+### `v0.1.1` (Current Release)
+- **Fractional & Unicode Scaling**: Enhanced portion scaling engine with full unicode fraction support (`½`, `⅓`, `⅔`, `¼`, `¾`, `⅛`, `⅜`, `⅝`, `⅞`) and mixed-fraction parsing across recipes.
+- **Recipe Editor Continuity**: Preserved note IDs and file system handles seamlessly when toggling between visual form and raw Markdown editor tabs.
+- **Audio Chime Reliability**: Added Web Audio API context auto-resumption for timer alerts on mobile devices and background tabs.
+- **Security & SSRF Hardening**: Implemented comprehensive hex-encoded IPv6 and IPv4-mapped IPv6 validation for the recipe importer backend.
+
+### `v0.1.0`
+- Initial release featuring native Obsidian vault synchronization, interactive cooking mode, AI web recipe grabber, weekly meal planning, and smart grocery list generation.
 
 ---
 
