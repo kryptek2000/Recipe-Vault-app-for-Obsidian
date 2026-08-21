@@ -148,6 +148,9 @@ export function RecipeEditorModal({
       );
     }
 
+    if (initialRecipe?.id) {
+      finalRecipe.id = initialRecipe.id;
+    }
     if (initialRecipe?.fileHandle) {
       finalRecipe.fileHandle = initialRecipe.fileHandle;
     }

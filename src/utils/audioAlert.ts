@@ -8,6 +8,9 @@ export function playTimerChime() {
     if (!AudioContextClass) return;
 
     const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx.currentTime;
 
     // Pleasant two-tone culinary chime (E5 -> G#5 -> B5 chord arpeggio)

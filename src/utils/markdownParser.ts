@@ -3,11 +3,32 @@ import { ObsidianRecipe, ParsedIngredient, RecipeStep, ObsidianCallout, MealPlan
 import { getRecipeImage } from './imageHelper';
 
 /**
- * Parses fraction strings (e.g., "1 1/2", "3/4", "0.5") into decimal numbers
+ * Parses fraction strings (e.g., "1 1/2", "3/4", "0.5", "½", "1 ½") into decimal numbers
  */
 export function parseFractionToDecimal(str: string): number | null {
-  const trimmed = str.trim();
+  let trimmed = str.trim();
   if (!trimmed) return null;
+
+  // Unicode fraction mapping
+  const unicodeMap: Record<string, number> = {
+    '½': 0.5,
+    '⅓': 1 / 3,
+    '⅔': 2 / 3,
+    '¼': 0.25,
+    '¾': 0.75,
+    '⅛': 0.125,
+    '⅜': 0.375,
+    '⅝': 0.625,
+    '⅞': 0.875,
+  };
+
+  // Check for standalone or mixed unicode fraction (e.g. "1 ½" or "½" or "1½")
+  const unicodeMatch = trimmed.match(/^(\d+)?\s*([½⅓⅔¼¾⅛⅜⅝⅞])$/);
+  if (unicodeMatch) {
+    const whole = unicodeMatch[1] ? parseInt(unicodeMatch[1], 10) : 0;
+    const fracVal = unicodeMap[unicodeMatch[2]] || 0;
+    return whole + fracVal;
+  }
 
   // Mixed fraction: "1 1/2" or "2 3/4"
   const mixedMatch = trimmed.match(/^(\d+)\s+(\d+)\/(\d+)$/);
@@ -36,31 +57,38 @@ export function parseFractionToDecimal(str: string): number | null {
  */
 export function formatAmount(val: number): string {
   if (val <= 0) return '';
-  const rounded = Math.round(val * 100) / 100;
   
-  // Common fractions
-  const fractionMap: Record<string, string> = {
-    '0.25': '1/4',
-    '0.33': '1/3',
-    '0.5': '1/2',
-    '0.67': '2/3',
-    '0.75': '3/4',
-    '0.125': '1/8',
-  };
+  const whole = Math.floor(val);
+  const frac = val - whole;
+  
+  // Test common cooking fractions with tolerance
+  const fractions: [number, string][] = [
+    [1 / 8, '1/8'],
+    [1 / 4, '1/4'],
+    [1 / 3, '1/3'],
+    [3 / 8, '3/8'],
+    [1 / 2, '1/2'],
+    [5 / 8, '5/8'],
+    [2 / 3, '2/3'],
+    [3 / 4, '3/4'],
+    [7 / 8, '7/8'],
+  ];
 
-  const whole = Math.floor(rounded);
-  const fracPart = Math.round((rounded - whole) * 100) / 100;
-  const fracStr = fractionMap[fracPart.toString()];
-
-  if (fracStr) {
-    return whole > 0 ? `${whole} ${fracStr}` : fracStr;
+  // Close to integer
+  if (Math.abs(frac) < 0.025) {
+    return whole.toString();
+  }
+  if (Math.abs(frac - 1) < 0.025) {
+    return (whole + 1).toString();
   }
 
-  // If close to integer
-  if (Math.abs(rounded - Math.round(rounded)) < 0.05) {
-    return Math.round(rounded).toString();
+  for (const [fracVal, str] of fractions) {
+    if (Math.abs(frac - fracVal) < 0.035) {
+      return whole > 0 ? `${whole} ${str}` : str;
+    }
   }
 
+  const rounded = Math.round(val * 100) / 100;
   return rounded.toString();
 }
 
@@ -312,7 +340,7 @@ export function parseIngredientLine(line: string): ParsedIngredient {
   const units = '(?:tbsp|tablespoon|tablespoons|tsp|teaspoon|teaspoons|cup|cups|oz|ounce|ounces|lb|lbs|pound|pounds|g|gram|grams|kg|kilogram|kilograms|ml|milliliter|milliliters|l|liter|liters|clove|cloves|pinch|pinches|dash|dashes|slice|slices|can|cans|stalk|stalks|bunch|bunches|sprig|sprigs|piece|pieces|head|heads|handful|handfuls)';
   
   // Regex to capture (amount) (unit)? (name)
-  const regex = new RegExp(`^(?:(\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?))\\s*(${units})?\\s*(?:of\\s+)?(.*)$`, 'i');
+  const regex = new RegExp(`^(?:(\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+\\s*[½⅓⅔¼¾⅛⅜⅝⅞]|[½⅓⅔¼¾⅛⅜⅝⅞]|\\d+(?:\\.\\d+)?))\\s*(${units})?\\s*(?:of\\s+)?(.*)$`, 'i');
   const match = cleanLine.match(regex);
 
   if (match) {
@@ -357,7 +385,7 @@ export function scaleIngredientText(
   
   // Replace quantities in the beginning or middle
   const units = '(?:tbsp|tablespoon|tablespoons|tsp|teaspoon|teaspoons|cup|cups|oz|ounce|ounces|lb|lbs|pound|pounds|g|gram|grams|kg|kilogram|kilograms|ml|milliliter|milliliters|l|liter|liters|clove|cloves|pinch|pinches|dash|dashes|slice|slices|can|cans|stalk|stalks|bunch|bunches|sprig|sprigs|piece|pieces|head|heads|handful|handfuls)';
-  const regex = new RegExp(`(\\b\\d+\\s+\\d+\\/\\d+|\\b\\d+\\/\\d+|\\b\\d+(?:\\.\\d+)?)\\s*(${units})?`, 'gi');
+  const regex = new RegExp(`(\\b\\d+\\s+\\d+\\/\\d+|\\b\\d+\\/\\d+|\\b\\d+\\s*[½⅓⅔¼¾⅛⅜⅝⅞]|[½⅓⅔¼¾⅛⅜⅝⅞]|\\b\\d+(?:\\.\\d+)?)\\s*(${units})?`, 'gi');
 
   const scaled = originalText.replace(regex, (match, amountStr, unitStr) => {
     const dec = parseFractionToDecimal(amountStr);
